@@ -34,10 +34,10 @@ Source files are under \`client/src\`.
 
 - marks:
   - missing, whole screen — "No test signs in as an admin." (Kim Min, 2026-09-29)
-- component: components/AdminMember.js, route at Routes.js:34
+- component: components/AdminMember.js, route at Routes.js:35
 - access: needs a role
   - route guard \`isAdminRole(memberRole)\` (role)
-  - link from /home#Home at components/Home.js:17, guard \`memberRole === 'ADMIN'\` (role)
+  - link from /home#Home at components/Home.js:19, guard \`memberRole === 'ADMIN'\` (role)
 - calls:
   - GET:/api/v1/member/list — no tests
 - tests:
@@ -48,7 +48,7 @@ Source files are under \`client/src\`.
 
 - marks:
   - needs-more, api depth — "The help index test fails." (reviewer, 2026-09-28)
-- component: components/Help.js, route at Routes.js:33
+- component: components/Help.js, route at Routes.js:34
 - access: needs a setting
   - link from /document/:id#DocumentDetail at components/DocumentDetail.js:20, guard \`helpEnabled\` (setting)
   - link from /signin#SignIn at components/SignIn.js:8, guard \`globalSettings.SYSTEM.HELP_LINK_ENABLED\` through openHelp (setting)
@@ -62,7 +62,7 @@ Source files are under \`client/src\`.
 
 - marks:
   - needs-more, data depth — "Moving a draft fails; add a data check once it is fixed." (reviewer, 2026-09-29)
-- component: components/Home.js, route at Routes.js:30
+- component: components/Home.js, route at Routes.js:31
 - access: opens without a setting or role
 - calls:
   - GET:/api/v1/document/list — no tests
@@ -80,7 +80,7 @@ Source files are under \`client/src\`.
 
 - marks:
   - missing, whole screen (Kim Min, 2026-09-30)
-- component: components/LabResult.js, route at Routes.js:37
+- component: components/LabResult.js, route at Routes.js:38
 - access: needs a setting
   - link from /lab#Lab at components/Lab.js:14, no guard, but /lab#Lab needs one itself
 - calls: none
