@@ -20,6 +20,7 @@ const AdminGroup = lazy(() => import('./components/AdminGroup'));
 const Lab = lazy(() => import('./components/Lab'));
 const LabResult = lazy(() => import('./components/LabResult'));
 const AdminAudit = lazy(() => import('./components/AdminAudit'));
+const AdminReport = lazy(() => import('./components/AdminReport'));
 
 export default function Routes({ memberRole, globalSettings }) {
   const isAdmin = isAdminRole(memberRole);
@@ -36,6 +37,7 @@ export default function Routes({ memberRole, globalSettings }) {
       {globalSettings.SYSTEM.LAB_ENABLED ? <Route path={Option.ROUTE_PATH.LAB} component={waitFor(Lab)} exact /> : null}
       <Route path={Option.ROUTE_PATH.LAB_RESULT} component={waitFor(LabResult)} exact />
       <Route path={Option.ROUTE_PATH.ADMIN_AUDIT} component={AdminAudit} exact />
+      <Route path={Option.ROUTE_PATH.ADMIN_REPORT} component={AdminReport} exact />
       <Redirect to={Option.ROUTE_PATH.SIGN_IN} />
     </Switch>
   );

@@ -18,6 +18,12 @@
   "settingsRoots": [
     "globalSettings"
   ],
+  "settingsDefaults": {
+    "globalSettings": {
+      "file": "store/settings.js",
+      "const": "defaults"
+    }
+  },
   "roleIdentifiers": [
     "memberRole",
     "session['member.role']"
