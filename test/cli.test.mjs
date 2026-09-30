@@ -25,9 +25,12 @@ test('rebuild writes map.json and tests.json to the configured output folder and
       '/home#Home',
       '/lab#Lab',
       '/signin#SignIn',
+      'PUT:/api/v1/document/{documentId}/name',
     ]);
     assert.match(stdout, /^screens 7 \|/m);
-    assert.match(stdout, /^screens with tests 7\/7 \| tags pointing outside the map 2 \| tests without a node tag 6$/m);
+    assert.match(stdout, /^calls 7 \| dead screens 2$/m);
+    assert.match(stdout, /^screens with tests 7\/7 \| tags pointing outside the map 3 \| tests without a node tag 6$/m);
+    assert.match(stdout, /^calls with tests 1\/7$/m);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
   }

@@ -35,11 +35,22 @@ test('a test tagged with two screens attaches to both', () => {
 test('tags pointing outside the map and tests without a node tag are reported separately, once per test across projects', () => {
   assert.deepEqual(
     links.unknownTags.map((u) => `${u.tag} ${u.test.file}:${u.test.line}`),
-    ['screen:/settings#Settings home.spec.ts:26', 'depth:e2e com.example.help.HelpServiceTest:null'],
+    [
+      'screen:/settings#Settings home.spec.ts:26',
+      'call:DELETE:/api/v1/document/{documentId} document.spec.ts:12',
+      'depth:e2e com.example.help.HelpServiceTest:null',
+    ],
   );
   assert.equal(links.untaggedCount, 6);
   assert.equal(Object.keys(links.nodes).includes('/settings#Settings'), false);
   assert.deepEqual(links.missingSources, []);
+});
+
+test('a Playwright test tagged with a call ID attaches to that call node', () => {
+  const id = 'PUT:/api/v1/document/{documentId}/name';
+  assert.deepEqual(summary(id), ['chromium ui fail']);
+  assert.equal(links.nodes[id][0].title, `rename is refused by the server @call:${id}`);
+  assert.equal(Object.keys(links.nodes).includes('DELETE:/api/v1/document/{documentId}'), false);
 });
 
 test('tagged JUnit tests attach with their status, reading tags from the suite and test names', () => {
@@ -158,6 +169,21 @@ test('Playwright and Vitest reports in one folder are each read only by their ow
     assert.deepEqual(result.nodes['/help#Help'].map((t) => `${t.format} ${t.source} ${t.line}`), ['playwright results/e2e.json 1', 'vitest results/unit.json null']);
     assert.equal(result.untaggedCount, 0);
   }, ['playwright', 'vitest']);
+});
+
+test('call IDs with colons, slashes and braces attach from every result format', () => {
+  const id = 'GET:/api/v1/document/{documentId}';
+  const files = {
+    'e2e.json': reportOf([{ title: 'a.spec.ts', specs: [{ title: `x @call:${id}`, file: 'a.spec.ts', line: 1, tests: [{ status: 'expected' }] }] }]),
+    'unit.json': vitestReportOf([{ ancestorTitles: [], title: 'y', status: 'passed', tags: [`@call:${id}`] }]),
+    'TEST-c.xml': `<testsuite name="S"><testcase name="z @call:${id}" classname="c"/></testsuite>`,
+    'checks.log': `VERDICT detail loads: UPHOLDS — ok @call:${id}\n`,
+  };
+  withResults(files, (own) => {
+    const result = linkTests(own, { screens: [], calls: [{ id }] });
+    assert.deepEqual(result.nodes[id].map((t) => t.format), ['playwright', 'vitest', 'junit', 'verdict']);
+    assert.deepEqual(result.unknownTags, []);
+  }, ['playwright', 'vitest', 'junit', 'verdict']);
 });
 
 test('a test whose only tag is a depth tag counts as untagged', () => {
