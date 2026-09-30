@@ -1,8 +1,8 @@
-# geumul (그물)
+# duru (두루)
 
-*A net that catches every screen of your app.*
+*Every screen of your app, under every configuration.*
 
-geumul computes a screen map of a web client **from its source code** — not by crawling one running
+duru computes a screen map of a web client **from its source code** — not by crawling one running
 instance or by watching production traffic. That lets it see what observation-based tools cannot:
 
 - **Screens reachable only under certain settings.** Every link and route carries the condition that
