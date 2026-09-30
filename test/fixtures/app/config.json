@@ -1,0 +1,34 @@
+{
+  "srcRoot": "client/src",
+  "routesFile": "Routes.js",
+  "routeElements": [
+    "Route"
+  ],
+  "routeConstant": "Option.ROUTE_PATH",
+  "constants": {
+    "Option": "_define/Option.js",
+    "Enum": "_define/Enum.js"
+  },
+  "apiModules": [
+    "_ajax/AjaxFunc.js"
+  ],
+  "passThroughCalls": [
+    "stringFormat"
+  ],
+  "settingsRoots": [
+    "globalSettings"
+  ],
+  "apiPathPrefix": "/",
+  "serverEndpoints": [
+    "server-endpoints.txt",
+    "server-endpoints-lab.txt"
+  ],
+  "tests": [
+    {
+      "format": "playwright",
+      "path": "results/playwright",
+      "depth": "ui"
+    }
+  ],
+  "outDir": "out"
+}
