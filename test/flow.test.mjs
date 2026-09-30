@@ -20,8 +20,9 @@ test('the flow starts at the entry screens and places each screen once, with the
     '/signin',
     '  /home',
     '    /document/:tab(draft|done) → /document/:id',
-    '    /document/:id',
+    '    /document/:id → /help',
     "    /admin/member [memberRole === 'ADMIN']",
+    '    /admin/group [isAdmin]',
     '    /lab [globalSettings.SYSTEM.LAB_ENABLED]',
     '      /lab/result',
     '  /help [globalSettings.SYSTEM.HELP_LINK_ENABLED]',
@@ -44,7 +45,7 @@ test('each screen box carries its test counts, its calls and whether it is dead 
 
 test('a flow grown from one screen reaches every screen below it, including ones the full flow placed under another branch', () => {
   const focused = buildFlow(map, linkTests(config, map), { from: '/document/:tab_draft_done_#DocumentList' });
-  assert.deepEqual(focused.roots.flatMap((r) => outline(r)), ['/document/:tab(draft|done)', '  /document/:id']);
+  assert.deepEqual(focused.roots.flatMap((r) => outline(r)), ['/document/:tab(draft|done)', '  /document/:id', '    /help [helpEnabled]']);
   assert.deepEqual(focused.unreached, []);
   assert.throws(() => buildFlow(map, { nodes: {} }, { from: '/nowhere#Nowhere' }), /unknown screen/);
 });

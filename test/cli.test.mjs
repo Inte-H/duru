@@ -16,7 +16,7 @@ test('rebuild writes map.json and tests.json to the configured output folder and
 
     const map = JSON.parse(fs.readFileSync(path.join(copy, 'out/map.json'), 'utf8'));
     const links = JSON.parse(fs.readFileSync(path.join(copy, 'out/tests.json'), 'utf8'));
-    assert.equal(map.screens.length, 8);
+    assert.equal(map.screens.length, 9);
     assert.deepEqual(Object.keys(links.nodes).sort(), [
       '/admin/member#AdminMember',
       '/document/:id#DocumentDetail',
@@ -27,9 +27,9 @@ test('rebuild writes map.json and tests.json to the configured output folder and
       '/signin#SignIn',
       'PUT:/api/v1/document/{documentId}/name',
     ]);
-    assert.match(stdout, /^screens 8 \|/m);
+    assert.match(stdout, /^screens 9 \|/m);
     assert.match(stdout, /^calls 7 \| dead screens 2$/m);
-    assert.match(stdout, /^screens with tests 7\/8 \| tags pointing outside the map 3 \| tests without a node tag 6$/m);
+    assert.match(stdout, /^screens with tests 7\/9 \| tags pointing outside the map 3 \| tests without a node tag 6$/m);
     assert.match(stdout, /^calls with tests 1\/7$/m);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
