@@ -4,20 +4,23 @@ import path from 'node:path';
 import { loadConfig } from './config.mjs';
 import { buildMap } from './map.mjs';
 import { gitUserName, startReviewServer } from './review.mjs';
+import { taskList } from './tasks.mjs';
 import { linkTests } from './test-links.mjs';
 
-const COMMANDS = ['extract', 'rebuild', 'review'];
+const COMMANDS = ['extract', 'rebuild', 'review', 'tasks'];
 const DEFAULT_PORT = 4400;
 const [, , command, configPath, ...extra] = process.argv;
 const portArg = command === 'review' && extra[0] === '--port' && extra.length === 2 ? Number(extra[1]) : null;
 if (!COMMANDS.includes(command) || !configPath || (extra.length > 0 && !Number.isInteger(portArg))) {
-  console.error(`usage: duru <extract|rebuild> <config.json>\n       duru review <config.json> [--port <n>]`);
+  console.error(`usage: duru <extract|rebuild|tasks> <config.json>\n       duru review <config.json> [--port <n>]`);
   process.exit(2);
 }
 
 const config = loadConfig(configPath);
 
-if (command === 'review') {
+if (command === 'tasks') {
+  process.stdout.write(taskList(config));
+} else if (command === 'review') {
   const author = gitUserName(config.configDir);
   const server = await startReviewServer(config, { port: portArg ?? DEFAULT_PORT, author });
   console.log(`review page http://127.0.0.1:${server.address().port}/`);

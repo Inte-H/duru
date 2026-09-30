@@ -1,0 +1,11 @@
+{
+  "id": "7d2b9c41-0e6a-4f3b-8d15-a9c2e7f04b68",
+  "target": {
+    "node": "/help#Help",
+    "depth": "api"
+  },
+  "status": "needs-more",
+  "note": "The help index test fails.",
+  "author": "reviewer",
+  "date": "2026-09-28T01:00:00.000Z"
+}
