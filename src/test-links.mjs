@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJunit } from './junit.mjs';
 import { readPlaywright } from './playwright.mjs';
+import { readVerdicts } from './verdict.mjs';
 import { readVitest } from './vitest.mjs';
 
 export const READERS = {
   playwright: { read: readPlaywright, extensions: ['.json'] },
   junit: { read: readJunit, extensions: ['.xml'] },
   vitest: { read: readVitest, extensions: ['.json'] },
+  verdict: { read: readVerdicts, extensions: ['.txt', '.log'] },
 };
 export const DEPTHS = ['ui', 'api', 'render', 'code', 'data'];
 const NODE_TAG = /^(screen|call):(.+)$/;
@@ -43,8 +45,9 @@ export function linkTests(config, map) {
     for (const file of resultFiles(source.path, READERS[source.format].extensions)) {
       const tests = READERS[source.format].read(file);
       if (!tests) continue;
+      const resultPath = path.relative(config.configDir, file);
       for (const t of tests) {
-        const testKey = `${t.file}:${t.line} ${t.title}`;
+        const testKey = `${resultPath} ${t.file}:${t.line} ${t.title}`;
         let depth = source.depth;
         for (const tag of t.tags) {
           const value = tag.match(DEPTH_TAG)?.[1];
@@ -58,7 +61,7 @@ export function linkTests(config, map) {
           continue;
         }
         const test = { title: t.title, file: t.file, line: t.line, project: t.project };
-        const entry = { ...test, source: path.relative(config.configDir, file), format: source.format, depth, status: t.status };
+        const entry = { ...test, source: resultPath, format: source.format, depth, status: t.status, ...(t.detail && { detail: t.detail }) };
         for (const tag of nodeTags) {
           if (known.has(tag)) {
             (nodes[tag.match(NODE_TAG)[2]] ??= []).push(entry);
