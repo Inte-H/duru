@@ -25,6 +25,7 @@ test('the flow starts at the entry screens and places each screen once, with the
     '    /admin/group [isAdmin]',
     '    /lab [globalSettings.SYSTEM.LAB_ENABLED]',
     '      /lab/result',
+    "    /admin/audit [session['member.role'] === 'AUDITOR']",
     '  /help [globalSettings.SYSTEM.HELP_LINK_ENABLED]',
   ]);
   assert.deepEqual(flow.unreached, []);
