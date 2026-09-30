@@ -14,7 +14,7 @@ test('every route of the fake client becomes a screen, with the guard on its rou
   const map = await buildFixture();
   assert.deepEqual(
     map.screens.map((s) => s.id),
-    ['/signin#SignIn', '/home#Home', '/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail', '/help#Help', '/admin/member#AdminMember', '/lab#Lab', '/lab/result#LabResult'],
+    ['/signin#SignIn', '/home#Home', '/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail', '/help#Help', '/admin/member#AdminMember', '/admin/group#AdminGroup', '/lab#Lab', '/lab/result#LabResult'],
   );
   assert.deepEqual(screen(map, '/admin/member#AdminMember').routeGuards, ['isAdminRole(memberRole)']);
   assert.deepEqual(screen(map, '/lab#Lab').routeGuards, ['globalSettings.SYSTEM.LAB_ENABLED']);
@@ -26,6 +26,7 @@ test('links carry their own guard, and a handler used under a guard passes it to
   const homeLinks = screen(map, '/home#Home').links.map((l) => ({ to: l.to, guards: l.guards }));
   assert.deepEqual(homeLinks, [
     { to: '/admin/member', guards: ["memberRole === 'ADMIN'"] },
+    { to: '/admin/group', guards: ['isAdmin'] },
     { to: '/lab', guards: ['globalSettings.SYSTEM.LAB_ENABLED'] },
     { to: '/document', guards: [] },
   ]);
@@ -193,7 +194,7 @@ test('two routes that end up with the same screen ID are reported', async () => 
     const src = fs.readFileSync(routes, 'utf8');
     fs.writeFileSync(routes, src.replace('    </Switch>', '      {memberRole && <Route path={Option.ROUTE_PATH.HELP} component={Help} />}\n    </Switch>'));
     const map = await buildFixture(copy);
-    assert.deepEqual(map.duplicateIds, [{ id: '/help#Help', lines: [29, 34] }]);
+    assert.deepEqual(map.duplicateIds, [{ id: '/help#Help', lines: [32, 38] }]);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
   }
@@ -222,6 +223,7 @@ test('a screen opens only under a setting or a role when its route is guarded or
   assert.deepEqual(restrictedKinds(map), {
     '/help#Help': ['setting'],
     '/admin/member#AdminMember': ['role'],
+    '/admin/group#AdminGroup': ['role'],
     '/lab#Lab': ['setting'],
     '/lab/result#LabResult': ['setting'],
   });
@@ -236,9 +238,16 @@ test('each restricted screen keeps the route guard and the links that decided it
     restricted: true,
     kinds: ['role'],
     route: [{ guard: 'isAdminRole(memberRole)', kinds: ['role'] }],
-    links: [{ from: '/home#Home', file: 'components/Home.js', line: 15, guards: [{ guard: "memberRole === 'ADMIN'", kinds: ['role'] }], fromRestricted: false }],
+    links: [{ from: '/home#Home', file: 'components/Home.js', line: 17, guards: [{ guard: "memberRole === 'ADMIN'", kinds: ['role'] }], fromRestricted: false }],
   });
   assert.deepEqual(screen(map, '/help#Help').access.links, [
+    {
+      from: '/document/:id#DocumentDetail',
+      file: 'components/DocumentDetail.js',
+      line: 20,
+      guards: [{ guard: 'helpEnabled', kinds: ['setting'] }],
+      fromRestricted: false,
+    },
     {
       from: '/signin#SignIn',
       file: 'components/SignIn.js',
@@ -255,6 +264,35 @@ test('each restricted screen keeps the route guard and the links that decided it
   });
 });
 
+test('a role check held in a local const hides the route and the link, and the screen opens only under a role', async () => {
+  const map = await buildFixture();
+  assert.deepEqual(screen(map, '/admin/group#AdminGroup').routeGuards, ['isAdmin']);
+  assert.deepEqual(screen(map, '/admin/group#AdminGroup').access, {
+    restricted: true,
+    kinds: ['role'],
+    route: [{ guard: 'isAdmin', kinds: ['role'] }],
+    links: [{ from: '/home#Home', file: 'components/Home.js', line: 18, guards: [{ guard: 'isAdmin', kinds: ['role'] }], fromRestricted: false }],
+  });
+});
+
+test('a setting held in a local const, even through another const, hides a link as a setting condition', async () => {
+  const map = await buildFixture();
+  const link = screen(map, '/help#Help').access.links.find((l) => l.from === '/document/:id#DocumentDetail');
+  assert.deepEqual(link.guards, [{ guard: 'helpEnabled', kinds: ['setting'] }]);
+});
+
+test('a let is not followed, and a const that refers back to itself is followed once', async () => {
+  const fromDetail = (map) => screen(map, '/help#Help').access.links.find((l) => l.from === '/document/:id#DocumentDetail');
+  const withLet = await buildEditedCopy([['client/src/components/DocumentDetail.js', 'const helpEnabled =', 'let helpEnabled =']]);
+  assert.deepEqual(fromDetail(withLet).guards, []);
+
+  const looping = await buildEditedCopy([
+    ['client/src/components/DocumentDetail.js', 'const helpEnabled = system.HELP_LINK_ENABLED;', 'const helpEnabled = () => system.HELP_LINK_ENABLED || helpEnabled();'],
+    ['client/src/components/DocumentDetail.js', '{helpEnabled && <Link', '{helpEnabled() && <Link'],
+  ]);
+  assert.deepEqual(fromDetail(looping).guards, [{ guard: 'helpEnabled()', kinds: ['setting'] }]);
+});
+
 test('a link to a path without its parameters enters every route that only adds parameters to it', async () => {
   const map = await buildFixture();
   const from = (id) => screen(map, id).access.links.map((l) => l.from);
@@ -269,7 +307,7 @@ test('a guard that reads neither a setting nor a configured role identifier does
   ]);
   assert.deepEqual(restrictedKinds(map), { '/lab#Lab': ['setting'], '/lab/result#LabResult': ['setting'] });
   assert.deepEqual(screen(map, '/admin/member#AdminMember').access.route, []);
-  assert.deepEqual(screen(map, '/help#Help').access.links.map((l) => l.guards), [[]]);
+  assert.deepEqual(screen(map, '/help#Help').access.links.map((l) => l.guards), [[{ guard: 'helpEnabled', kinds: ['setting'] }], []]);
 });
 
 test('screens that link only to each other stay open', async () => {
@@ -287,7 +325,7 @@ test('screens that link only to each other stay open', async () => {
     ],
   ]);
   assert.deepEqual(screen(map, '/lab#Lab').access.links.map((l) => l.from), ['/lab/result#LabResult']);
-  assert.deepEqual(restrictedKinds(map), { '/help#Help': ['setting'], '/admin/member#AdminMember': ['role'] });
+  assert.deepEqual(restrictedKinds(map), { '/help#Help': ['setting'], '/admin/member#AdminMember': ['role'], '/admin/group#AdminGroup': ['role'] });
 });
 
 test('a back link does not open screens that are reached only through a guarded link', async () => {
@@ -299,6 +337,7 @@ test('a back link does not open screens that are reached only through a guarded 
   assert.deepEqual(restrictedKinds(map), {
     '/help#Help': ['setting'],
     '/admin/member#AdminMember': ['role'],
+    '/admin/group#AdminGroup': ['role'],
     '/lab#Lab': ['setting'],
     '/lab/result#LabResult': ['setting'],
   });
@@ -311,13 +350,13 @@ for (const [name, use] of [
   test(`a handler also used ${name} leaves its link open`, async () => {
     const map = await buildEditedCopy([['client/src/components/SignIn.js', '    </form>', `      ${use}\n    </form>`]]);
     assert.equal(screen(map, '/help#Help').access.restricted, false);
-    assert.deepEqual(screen(map, '/help#Help').access.links.map((l) => l.guards), [[]]);
+    assert.deepEqual(screen(map, '/help#Help').access.links.map((l) => l.guards), [[{ guard: 'helpEnabled', kinds: ['setting'] }], []]);
   });
 }
 
 test('entry screens come from redirects in the routes file, screens no link leads to, and the config', async () => {
   const map = await buildFixture();
-  assert.deepEqual(map.entries, [{ screen: '/signin#SignIn', reasons: [{ kind: 'redirect', file: 'Routes.js', line: 33 }, { kind: 'no-incoming-link' }] }]);
+  assert.deepEqual(map.entries, [{ screen: '/signin#SignIn', reasons: [{ kind: 'redirect', file: 'Routes.js', line: 37 }, { kind: 'no-incoming-link' }] }]);
   assert.deepEqual(map.unknownEntryPaths, []);
 
   const configured = await buildEditedCopy([['config.json', '"roleIdentifiers"', '"entryPaths": ["/help", "/gone"],\n  "roleIdentifiers"']]);
