@@ -147,6 +147,18 @@ test('the page reports a missing map instead of serving empty data', async () =>
   }
 });
 
+test('the flow grown from one screen is served for that screen, and an unknown screen is not found', async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const res = await fetch(`${base}/api/flow?from=${encodeURIComponent('/document/:tab_draft_done_#DocumentList')}`);
+      assert.equal(res.status, 200);
+      const { roots } = await res.json();
+      assert.deepEqual([roots[0].id, ...roots[0].children.map((c) => c.id)], ['/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail']);
+      assert.equal((await fetch(`${base}/api/flow?from=${encodeURIComponent('/nowhere#Nowhere')}`)).status, 404);
+    }),
+  );
+});
+
 test('requests another site could send through the browser are refused', async () => {
   await withRebuiltFixture({}, (config) =>
     withServer(config, 'reviewer', async (base) => {
@@ -229,3 +241,106 @@ for (const host of ['127.0.0.1', 'localhost']) {
     );
   });
 }
+
+const screenBox = async (p, id) => {
+  const i = await p.$$eval('#flow .box.screen', (els, id) => els.findIndex((e) => e.title.split('\n')[0] === id), id);
+  assert.ok(i >= 0, `box ${id} is drawn`);
+  return p.locator('#flow .box.screen').nth(i);
+};
+const boxCount = async (p) => ({ screens: await p.locator('#flow .box.screen').count(), calls: await p.locator('#flow .box.call').count() });
+const flowButton = (p, label) => p.locator('.flowbar button', { hasText: label });
+
+test('in a browser, the flow graph opens calls and branches, folds them, and a box opens the screen in the list', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.click('#view-flow');
+        await p.waitForSelector('#flow .box');
+        assert.equal(await p.isHidden('main'), true);
+        assert.deepEqual(await boxCount(p), { screens: 8, calls: 0 });
+
+        const home = await screenBox(p, '/home#Home');
+        await home.locator('.calls').click();
+        assert.deepEqual(await boxCount(p), { screens: 8, calls: 2 });
+        assert.match(await home.locator('.calls').textContent(), /▾/);
+        await home.locator('.calls').click();
+
+        const signin = await screenBox(p, '/signin#SignIn');
+        await signin.locator('button.toggle', { hasText: '−' }).click();
+        assert.deepEqual(await boxCount(p), { screens: 1, calls: 0 });
+        const folded = await screenBox(p, '/signin#SignIn');
+        assert.match(await folded.locator('.l2').textContent(), /하위 합/);
+        await folded.locator('button.toggle', { hasText: '+' }).click();
+
+        await flowButton(p, '모두 펼치기').click();
+        assert.deepEqual(await boxCount(p), { screens: 8, calls: 8 });
+        const overlaps = await p.$$eval('#flow .box', (boxes) => boxes.flatMap((box) => {
+          const outer = box.getBoundingClientRect();
+          return [...box.querySelectorAll('.l1, .l3')].flatMap((line) => [...line.querySelectorAll('button')].filter((b) => {
+            const r = b.getBoundingClientRect();
+            const text = line.querySelector('.text')?.getBoundingClientRect();
+            return r.right > outer.right + 0.5 || r.bottom > outer.bottom + 0.5 || (text && text.right > r.left + 0.5);
+          }).map(() => box.title.split('\n')[0]));
+        }));
+        assert.deepEqual(overlaps, []);
+
+        await flowButton(p, '모두 접기').click();
+        assert.deepEqual(await boxCount(p), { screens: 1, calls: 0 });
+        await (await screenBox(p, '/signin#SignIn')).locator('button[title^="이 가지 전부"]').click();
+        assert.deepEqual(await boxCount(p), { screens: 8, calls: 8 });
+
+        await (await screenBox(p, '/lab/result#LabResult')).click();
+        await p.waitForSelector('main:not([hidden])');
+        assert.equal(await p.textContent('#center h3'), '/lab/result');
+      }),
+    ),
+  );
+});
+
+test('in a browser, "gaps only" folds exactly the branches with no untested or failing box', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.click('#view-flow');
+        await p.waitForSelector('#flow .box');
+        await p.evaluate(() => {
+          const walk = (ns) => ns.flatMap((n) => [n, ...walk(n.children)]);
+          const lab = walk(state.data.flow.roots).find((n) => n.id === '/lab#Lab');
+          for (const n of walk([lab])) for (const x of [n, ...n.calls]) x.counts = { pass: 1, fail: 0, pending: 0 };
+        });
+        await flowButton(p, '빈틈만 펼치기').click();
+        const lab = await screenBox(p, '/lab#Lab');
+        assert.equal(await lab.locator('button.toggle', { hasText: '+' }).count(), 1);
+        assert.match(await lab.getAttribute('class'), /s-pass/);
+        assert.equal(await (await screenBox(p, '/home#Home')).locator('button.toggle', { hasText: '−' }).count(), 1);
+        assert.equal(await p.$$eval('#flow .box.screen', (els) => els.some((e) => e.title.startsWith('/lab/result#'))), false);
+      }),
+    ),
+  );
+});
+
+test('in a browser, one branch is shown on its own, and a late answer for an earlier click does not replace the later one', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.click('#view-flow');
+        await p.waitForSelector('#flow .box');
+        await (await screenBox(p, '/home#Home')).locator('button[title="이 가지만 보기"]').click();
+        await p.waitForSelector('.flowbar .focusing');
+        assert.match(await p.textContent('.flowbar .focusing'), /^\/home /);
+        assert.equal((await boxCount(p)).screens, 6);
+        await flowButton(p, '전체 보기').click();
+        assert.equal((await boxCount(p)).screens, 8);
+
+        await p.route('**/api/flow?from=*', async (route) => {
+          if (route.request().url().includes(encodeURIComponent('/signin#SignIn'))) await new Promise((r) => setTimeout(r, 500));
+          await route.continue();
+        });
+        await (await screenBox(p, '/signin#SignIn')).locator('button[title="이 가지만 보기"]').click();
+        await (await screenBox(p, '/lab#Lab')).locator('button[title="이 가지만 보기"]').click();
+        await p.waitForTimeout(800);
+        assert.match(await p.textContent('.flowbar .focusing'), /^\/lab /);
+      }),
+    ),
+  );
+});
