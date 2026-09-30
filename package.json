@@ -26,5 +26,8 @@
     "@babel/parser": "^7.29.9",
     "@babel/traverse": "^7.29.8",
     "fast-xml-parser": "^5.11.2"
+  },
+  "devDependencies": {
+    "playwright-core": "1.60.0"
   }
 }
