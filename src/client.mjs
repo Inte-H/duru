@@ -427,12 +427,24 @@ export async function extractClient(config) {
           path: typeof pathValue === 'string' ? pathValue : UNKNOWN,
           component: compName,
           componentFile: resolveComponent(p.scope, compName, routesFile),
+          wrapperFiles: wrappersOf(p, routesFile),
           routeGuards: guardsOf(p, src, inits),
           line: p.node.loc.start.line,
         });
       },
     });
     return screens;
+  }
+
+  function wrappersOf(routePath, routesFile) {
+    const files = [];
+    for (let a = routePath.parentPath; a; a = a.parentPath) {
+      const name = a.isJSXElement() && a.node.openingElement.name;
+      if (name?.type !== 'JSXIdentifier') continue;
+      const file = resolveComponent(a.scope, name.name, routesFile);
+      if (file) files.push(file);
+    }
+    return files;
   }
 
   function resolveComponent(scope, name, fromFile) {
@@ -459,8 +471,8 @@ export async function extractClient(config) {
   const routeValues = lookupConstant(config.routeConstant.split('.')) ?? {};
   const rel = (f) => (f ? path.relative(config.srcRoot, f) : null);
 
-  const screens = extractScreens(path.join(config.srcRoot, config.routesFile)).map((s) => {
-    const files = s.componentFile ? closureOf(s.componentFile) : [];
+  const screens = extractScreens(path.join(config.srcRoot, config.routesFile)).map(({ wrapperFiles, ...s }) => {
+    const files = [...new Set([s.componentFile, ...wrapperFiles].filter(Boolean).flatMap(closureOf))];
     const apiCalls = [];
     const settingReads = [];
     const links = [];
