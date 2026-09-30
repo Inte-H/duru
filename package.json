@@ -2,8 +2,16 @@
   "name": "duru",
   "version": "1.0.0",
   "description": "Every screen of your app, under every configuration — computes a screen map from source, including screens reachable only under certain settings and screens whose backing API is gone",
+  "bin": {
+    "duru": "src/cli.mjs"
+  },
   "scripts": {
-    "extract": "node src/extract.mjs"
+    "extract": "node src/cli.mjs extract",
+    "rebuild": "node src/cli.mjs rebuild",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
   },
   "keywords": [
     "qa",
