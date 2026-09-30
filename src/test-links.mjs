@@ -25,7 +25,7 @@ function resultFiles(p, extensions) {
 }
 
 export function linkTests(config, map) {
-  const known = new Set(map.screens.map((s) => `screen:${s.id}`));
+  const known = new Set([...map.screens.map((s) => `screen:${s.id}`), ...(map.calls ?? []).map((c) => `call:${c.id}`)]);
   const nodes = {};
   const unknownTags = [];
   const untagged = new Set();

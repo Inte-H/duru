@@ -26,6 +26,7 @@ const allEndpoints = Object.values(map.apiFunctions).flatMap((f) => f.endpoints)
 const count = (st) => allEndpoints.filter((e) => e.server.status === st).length;
 console.log(`screens ${map.screens.length} | api functions ${Object.keys(map.apiFunctions).length} | endpoints match ${count('match')} method-mismatch ${count('method-mismatch')} none ${count('none')} unresolved ${count('unresolved')}`);
 console.log(`dead calls reachable from screens: ${map.deadCalls.length}`);
+console.log(`calls ${map.calls.length} | dead screens ${map.screens.filter((s) => s.dead).length}`);
 for (const d of map.duplicateIds) console.log(`  duplicate screen ID ${d.id} ← ${d.lines.map((l) => `${config.routesFile}:${l}`).join(', ')}`);
 
 if (command === 'rebuild') {
@@ -33,6 +34,7 @@ if (command === 'rebuild') {
   console.log(`wrote ${write('tests.json', links)}`);
   const covered = map.screens.filter((s) => links.nodes[s.id]).length;
   console.log(`screens with tests ${covered}/${map.screens.length} | tags pointing outside the map ${links.unknownTags.length} | tests without a node tag ${links.untaggedCount}`);
+  console.log(`calls with tests ${map.calls.filter((c) => links.nodes[c.id]).length}/${map.calls.length}`);
   for (const m of links.missingSources) console.log(`  missing test results ${m}`);
   for (const u of links.unknownTags) console.log(`  unknown ${u.tag} ← ${u.test.file}:${u.test.line} ${u.test.title}`);
 }

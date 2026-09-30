@@ -193,6 +193,13 @@ export async function extractClient(config) {
         if (fns[callee] && fns[callee] !== fn) fn.endpoints.push(...fns[callee].endpoints.map((e) => ({ ...e, via: callee })));
       }
       delete fn.delegates;
+      const seen = new Set();
+      fn.endpoints = fn.endpoints.filter((e) => {
+        const key = JSON.stringify([e.method, e.url, e.via ?? null]);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
     return fns;
   }
