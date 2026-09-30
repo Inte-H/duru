@@ -13,7 +13,7 @@ export const ajaxDocumentDetail = async (id) => {
 
 export const ajaxDocumentRename = async (id, name) => {
   const apiInfo = Option.REST_API.DOCUMENT.RENAME;
-  return Ajax.request({ info: { METHOD: apiInfo.METHOD, URL: stringFormat(apiInfo.URL, id) }, body: { name } });
+  return Ajax.request({ info: { ...apiInfo, URL: stringFormat(apiInfo.URL, id) }, body: { name } });
 };
 
 export const ajaxDocumentArchive = async (ids) => Ajax.request({ info: Option.REST_API.DOCUMENT.ARCHIVE, body: { ids } });
