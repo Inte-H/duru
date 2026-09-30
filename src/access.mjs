@@ -1,12 +1,22 @@
 import { UNKNOWN } from './client.mjs';
+import { parseRoleEntry } from './config.mjs';
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function rolePattern(entry) {
+  const { name, object, key } = parseRoleEntry(entry);
+  if (name) return escapeRegExp(name);
+  const obj = escapeRegExp(object);
+  const k = escapeRegExp(key);
+  const bracket = `${obj}\\s*(?:\\?\\.\\s*)?\\[\\s*(?:'${k}'|"${k}")\\s*\\]`;
+  return /^[A-Za-z_$][\w$]*$/.test(key) ? `${bracket}|${obj}\\s*\\??\\.\\s*${k}` : bracket;
+}
 
 function guardKinds(config, guardInits) {
   const alt = (names) => names.map(escapeRegExp).join('|');
   const rules = [];
   const roles = config.roleIdentifiers ?? [];
-  if (roles.length) rules.push(['role', new RegExp(`(?<![\\w$])(?:${alt(roles)})(?![\\w$])`)]);
+  if (roles.length) rules.push(['role', new RegExp(`(?<![\\w$])(?:${roles.map(rolePattern).join('|')})(?![\\w$])`)]);
   const settings = config.settingsRoots ?? [];
   if (settings.length) rules.push(['setting', new RegExp(`(?<![\\w$])(?:${alt(settings)})\\s*\\??\\.`)]);
   return (guard, file) => {

@@ -23,6 +23,7 @@ class Option {
       ADMIN_GROUP: this.CONTEXT_PATH + 'admin/group',
       LAB: this.CONTEXT_PATH + 'lab',
       LAB_RESULT: this.CONTEXT_PATH + 'lab/result',
+      ADMIN_AUDIT: this.CONTEXT_PATH + 'admin/audit',
     };
   }
 

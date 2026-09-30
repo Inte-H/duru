@@ -46,8 +46,8 @@ relative to the config file, except the files inside the client source (`routesF
   stand-in source for outside packages they import
 - `apiModules`, `passThroughCalls` — where API functions live and which wrappers pass a URL through
 - `settingsRoots` — identifiers through which settings are read
-- `roleIdentifiers` — identifiers that hold the user's role (optional, default none); a guard that uses one
-  of them as a whole identifier is a role condition
+- `roleIdentifiers` — where the user's role is read (optional, default none): an identifier (`memberRole`) or
+  one member of an object (`workspace['member.role']`)
 - `redirectElements`, `entryPaths` — how fallback redirects are declared in the routes file (default
   `Redirect`), and route paths of further screens users start from when the code does not show them
 - `serverEndpoints`, `apiPathPrefix` — one or more server endpoint lists
@@ -84,9 +84,12 @@ and a screen is marked `dead: true` when it reaches a call whose server match is
 alone does not make a screen dead.
 
 Each screen's `access` says whether it opens only under a setting or a role. A guard that reads a member of
-a `settingsRoots` identifier is a `setting` condition, one that uses a `roleIdentifiers` identifier is a
-`role` condition (it can be both), and any other guard (UI state such as `selected.length > 0`) does not
-block. A `const` declared in the same file that a guard uses is judged by its initializer too, and so are
+a `settingsRoots` identifier is a `setting` condition, one that reads a `roleIdentifiers` entry is a `role`
+condition (it can be both), and any other guard (UI state such as `selected.length > 0`) does not block. An
+identifier entry matches as a whole identifier. An object entry matches only a read of that member:
+`workspace['member.role']` also matches `workspace?.['member.role']` and the double-quoted form, a key that is a
+plain name matches the dot form too (`session.role`, `session?.role`), and `workspace['member.id']` does not match.
+A `const` declared in the same file that a guard uses is judged by its initializer too, and so are
 the consts that initializer uses in turn: after `const isAdmin = isAdminRole(memberRole)`, the guard
 `isAdmin` is a role condition and is still listed as `isAdmin`. The walk starts from entry screens, listed under `entries` with their `reasons`: the targets of
 redirects in the routes file that no setting or role guards (`redirect`), screens no link leads to (`no-incoming-link`, such as pages
