@@ -39,7 +39,7 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
 }
 
 export async function buildMap(config) {
-  const { screens, apiFunctions, redirects } = await extractClient(config);
+  const { screens, apiFunctions, redirects, guardInits } = await extractClient(config);
   const server = config.serverEndpoints.flatMap(loadServerEndpoints);
   const apiPathPrefix = config.apiPathPrefix ?? '/';
 
@@ -55,7 +55,7 @@ export async function buildMap(config) {
     ...s,
     apiCalls: s.apiCalls.map((c) => ({ ...c, endpoints: apiFunctions[c.fn]?.endpoints ?? null })),
   }));
-  const { access, entries, unknownEntryPaths } = screenAccess(mapped, redirects, config);
+  const { access, entries, unknownEntryPaths } = screenAccess(mapped, redirects, config, guardInits);
   mapped.forEach((s, i) => (s.access = access[i]));
 
   const linesById = new Map();

@@ -86,7 +86,9 @@ alone does not make a screen dead.
 Each screen's `access` says whether it opens only under a setting or a role. A guard that reads a member of
 a `settingsRoots` identifier is a `setting` condition, one that uses a `roleIdentifiers` identifier is a
 `role` condition (it can be both), and any other guard (UI state such as `selected.length > 0`) does not
-block. The walk starts from entry screens, listed under `entries` with their `reasons`: the targets of
+block. A `const` declared in the same file that a guard uses is judged by its initializer too, and so are
+the consts that initializer uses in turn: after `const isAdmin = isAdminRole(memberRole)`, the guard
+`isAdmin` is a role condition and is still listed as `isAdmin`. The walk starts from entry screens, listed under `entries` with their `reasons`: the targets of
 redirects in the routes file that no setting or role guards (`redirect`), screens no link leads to (`no-incoming-link`, such as pages
 opened from an e-mail), and `entryPaths` (`config`; paths that match no route go to `unknownEntryPaths`).
 A screen is open when an entry screen reaches it through links and routes without such a guard, and
