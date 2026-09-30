@@ -21,6 +21,7 @@ class Option {
       HELP: this.CONTEXT_PATH + 'help',
       ADMIN_MEMBER: this.CONTEXT_PATH + 'admin/member',
       LAB: this.CONTEXT_PATH + 'lab',
+      LAB_RESULT: this.CONTEXT_PATH + 'lab/result',
     };
   }
 

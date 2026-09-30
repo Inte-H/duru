@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Route, Switch } from 'react-router-dom';
+import { Redirect, Route, Switch } from 'react-router-dom';
 import Option from './_define/Option';
 import Enum from './_define/Enum';
 import SignIn from './components/SignIn';
@@ -17,6 +17,7 @@ const DocumentDetail = lazy(() => import('./components/DocumentDetail'));
 const Help = lazy(() => import('./components/Help'));
 const AdminMember = lazy(() => import('./components/AdminMember'));
 const Lab = lazy(() => import('./components/Lab'));
+const LabResult = lazy(() => import('./components/LabResult'));
 
 export default function Routes({ memberRole, globalSettings }) {
   return (
@@ -28,6 +29,8 @@ export default function Routes({ memberRole, globalSettings }) {
       <Route path={Option.ROUTE_PATH.HELP} component={Help} exact />
       {isAdminRole(memberRole) && <Route path={Option.ROUTE_PATH.ADMIN_MEMBER} component={AdminMember} exact />}
       {globalSettings.SYSTEM.LAB_ENABLED ? <Route path={Option.ROUTE_PATH.LAB} component={waitFor(Lab)} exact /> : null}
+      <Route path={Option.ROUTE_PATH.LAB_RESULT} component={waitFor(LabResult)} exact />
+      <Redirect to={Option.ROUTE_PATH.SIGN_IN} />
     </Switch>
   );
 }

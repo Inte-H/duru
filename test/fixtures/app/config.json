@@ -18,6 +18,9 @@
   "settingsRoots": [
     "globalSettings"
   ],
+  "roleIdentifiers": [
+    "memberRole"
+  ],
   "apiPathPrefix": "/",
   "serverEndpoints": [
     "server-endpoints.txt",

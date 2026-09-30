@@ -1,5 +1,6 @@
 import { extractClient, UNKNOWN } from './client.mjs';
 import { clientPath, loadServerEndpoints, matchEndpoint } from './server.mjs';
+import { screenAccess } from './access.mjs';
 
 // JUnit 태그에 쓸 수 없는 문자. 이 문자만 없으면 Playwright · Vitest 제목에서도 그대로 태그로 쓸 수 있다.
 const TAG_FORBIDDEN = /[\s,()&|!]+/g;
@@ -38,7 +39,7 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
 }
 
 export async function buildMap(config) {
-  const { screens, apiFunctions } = await extractClient(config);
+  const { screens, apiFunctions, redirects } = await extractClient(config);
   const server = config.serverEndpoints.flatMap(loadServerEndpoints);
   const apiPathPrefix = config.apiPathPrefix ?? '/';
 
@@ -54,6 +55,8 @@ export async function buildMap(config) {
     ...s,
     apiCalls: s.apiCalls.map((c) => ({ ...c, endpoints: apiFunctions[c.fn]?.endpoints ?? null })),
   }));
+  const { access, entries, unknownEntryPaths } = screenAccess(mapped, redirects, config);
+  mapped.forEach((s, i) => (s.access = access[i]));
 
   const linesById = new Map();
   for (const s of mapped) linesById.set(s.id, [...(linesById.get(s.id) ?? []), s.line]);
@@ -77,5 +80,7 @@ export async function buildMap(config) {
     deadCalls,
     duplicateIds,
     calls: buildCalls(apiFunctions, mapped, apiPathPrefix),
+    entries,
+    unknownEntryPaths,
   };
 }
