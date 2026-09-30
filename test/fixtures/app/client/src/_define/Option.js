@@ -24,6 +24,7 @@ class Option {
       LAB: this.CONTEXT_PATH + 'lab',
       LAB_RESULT: this.CONTEXT_PATH + 'lab/result',
       ADMIN_AUDIT: this.CONTEXT_PATH + 'admin/audit',
+      ADMIN_REPORT: this.CONTEXT_PATH + 'admin/report',
     };
   }
 

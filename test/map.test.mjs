@@ -14,7 +14,7 @@ test('every route of the fake client becomes a screen, with the guard on its rou
   const map = await buildFixture();
   assert.deepEqual(
     map.screens.map((s) => s.id),
-    ['/signin#SignIn', '/home#Home', '/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail', '/help#Help', '/admin/member#AdminMember', '/admin/group#AdminGroup', '/lab#Lab', '/lab/result#LabResult', '/admin/audit#AdminAudit'],
+    ['/signin#SignIn', '/home#Home', '/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail', '/help#Help', '/admin/member#AdminMember', '/admin/group#AdminGroup', '/lab#Lab', '/lab/result#LabResult', '/admin/audit#AdminAudit', '/admin/report#AdminReport'],
   );
   assert.deepEqual(screen(map, '/admin/member#AdminMember').routeGuards, ['isAdminRole(memberRole)']);
   assert.deepEqual(screen(map, '/lab#Lab').routeGuards, ['globalSettings.SYSTEM.LAB_ENABLED']);
@@ -29,6 +29,10 @@ test('links carry their own guard, and a handler used under a guard passes it to
     { to: '/admin/group', guards: ['isAdmin'] },
     { to: '/lab', guards: ['globalSettings.SYSTEM.LAB_ENABLED'] },
     { to: '/admin/audit', guards: ["session['member.role'] === 'AUDITOR'"] },
+    {
+      to: '/admin/report',
+      guards: ["globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT'", "['ADMIN', 'OWNER'].indexOf(session['member.role']) > -1", 'MENUS.ADMIN'],
+    },
     { to: '/document', guards: [] },
   ]);
 
@@ -46,7 +50,11 @@ test('links carry their own guard, and a handler used under a guard passes it to
 test('each screen lists the settings read by the files it reaches', async () => {
   const map = await buildFixture();
   const keys = (id) => screen(map, id).settingReads.map((r) => `${r.file} ${r.key}`);
-  assert.deepEqual(keys('/home#Home'), ['components/Home.js SYSTEM.LAB_ENABLED', 'components/DocumentTable.js DISPLAY.PAGE_SIZE']);
+  assert.deepEqual(keys('/home#Home'), [
+    'components/Home.js SYSTEM.LAB_ENABLED',
+    'components/SideMenu.js SYSTEM.MAIN_MENU',
+    'components/DocumentTable.js DISPLAY.PAGE_SIZE',
+  ]);
   assert.deepEqual(keys('/signin#SignIn'), ['components/SignIn.js SYSTEM.HELP_LINK_ENABLED']);
   assert.deepEqual(keys('/help#Help'), []);
 });
@@ -195,7 +203,7 @@ test('two routes that end up with the same screen ID are reported', async () => 
     const src = fs.readFileSync(routes, 'utf8');
     fs.writeFileSync(routes, src.replace('    </Switch>', '      {memberRole && <Route path={Option.ROUTE_PATH.HELP} component={Help} />}\n    </Switch>'));
     const map = await buildFixture(copy);
-    assert.deepEqual(map.duplicateIds, [{ id: '/help#Help', lines: [33, 40] }]);
+    assert.deepEqual(map.duplicateIds, [{ id: '/help#Help', lines: [34, 42] }]);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
   }
@@ -228,6 +236,7 @@ test('a screen opens only under a setting or a role when its route is guarded or
     '/lab#Lab': ['setting'],
     '/lab/result#LabResult': ['setting'],
     '/admin/audit#AdminAudit': ['role'],
+    '/admin/report#AdminReport': ['role', 'setting'],
   });
   const open = map.screens.filter((s) => !s.access.restricted);
   assert.deepEqual(open.map((s) => s.id), ['/signin#SignIn', '/home#Home', '/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail']);
@@ -240,7 +249,7 @@ test('each restricted screen keeps the route guard and the links that decided it
     restricted: true,
     kinds: ['role'],
     route: [{ guard: 'isAdminRole(memberRole)', kinds: ['role'] }],
-    links: [{ from: '/home#Home', file: 'components/Home.js', line: 17, guards: [{ guard: "memberRole === 'ADMIN'", kinds: ['role'] }], fromRestricted: false }],
+    links: [{ from: '/home#Home', file: 'components/Home.js', line: 19, guards: [{ guard: "memberRole === 'ADMIN'", kinds: ['role'] }], fromRestricted: false }],
   });
   assert.deepEqual(screen(map, '/help#Help').access.links, [
     {
@@ -273,7 +282,7 @@ test('a role check held in a local const hides the route and the link, and the s
     restricted: true,
     kinds: ['role'],
     route: [{ guard: 'isAdmin', kinds: ['role'] }],
-    links: [{ from: '/home#Home', file: 'components/Home.js', line: 18, guards: [{ guard: 'isAdmin', kinds: ['role'] }], fromRestricted: false }],
+    links: [{ from: '/home#Home', file: 'components/Home.js', line: 20, guards: [{ guard: 'isAdmin', kinds: ['role'] }], fromRestricted: false }],
   });
 });
 
@@ -305,7 +314,7 @@ test('a role read from one member of a store object hides a link as a role condi
       {
         from: '/home#Home',
         file: 'components/Home.js',
-        line: 20,
+        line: 22,
         guards: [{ guard: "session['member.role'] === 'AUDITOR'", kinds: ['role'] }],
         fromRestricted: false,
       },
@@ -357,6 +366,63 @@ test('a roleIdentifiers entry that is neither an identifier nor one member of an
   }
 });
 
+test('a menu built from a settings list links to each listed screen, under the list and the guards around it', async () => {
+  const map = await buildFixture();
+  assert.deepEqual(screen(map, '/admin/report#AdminReport').access, {
+    restricted: true,
+    kinds: ['role', 'setting'],
+    route: [],
+    links: [
+      {
+        from: '/home#Home',
+        file: 'components/SideMenu.js',
+        line: 11,
+        guards: [
+          { guard: "globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT'", kinds: ['setting'] },
+          { guard: "['ADMIN', 'OWNER'].indexOf(session['member.role']) > -1", kinds: ['role'] },
+          { guard: 'MENUS.ADMIN', kinds: ['setting'] },
+        ],
+        fromRestricted: false,
+      },
+    ],
+  });
+  assert.deepEqual(screen(map, '/home#Home').links.filter((l) => l.file === 'components/SideMenu.js').map((l) => l.to), ['/admin/report']);
+});
+
+test('a menu rendered with map over the settings list links the same way', async () => {
+  const map = await buildEditedCopy([
+    [
+      'client/src/components/SideMenu.js',
+      '      MENUS.ADMIN?.LIST?.forEach((menu) => {\n        items.push({ title: menu, href: Option.ROUTE_PATH[menu] });\n      });',
+      '      return MENUS.ADMIN.LIST.map((menu) => <Link to={Option.ROUTE_PATH[menu]}>{menu}</Link>);',
+    ],
+  ]);
+  assert.deepEqual(
+    screen(map, '/admin/report#AdminReport').access.links.map((l) => l.guards.map((g) => g.guard)),
+    [["globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT'", "['ADMIN', 'OWNER'].indexOf(session['member.role']) > -1", 'MENUS.ADMIN']],
+  );
+});
+
+test('without settingsDefaults a route picked by a computed key makes no link', async () => {
+  const map = await buildEditedCopy([
+    ['config.json', '  "settingsDefaults": {\n    "globalSettings": {\n      "file": "store/settings.js",\n      "const": "defaults"\n    }\n  },\n', ''],
+  ]);
+  assert.deepEqual(screen(map, '/admin/report#AdminReport').access.links, []);
+  assert.equal(screen(map, '/admin/report#AdminReport').access.restricted, false);
+  assert.deepEqual(map.entries.find((e) => e.screen === '/admin/report#AdminReport').reasons, [{ kind: 'no-incoming-link' }]);
+});
+
+test('a settingsDefaults entry must name a settings root and a const holding an object in its file', async () => {
+  await assert.rejects(
+    buildEditedCopy([['config.json', '"settingsDefaults": {\n    "globalSettings"', '"settingsDefaults": {\n    "appSettings"']]),
+    /settingsDefaults root "appSettings" is not listed in settingsRoots/,
+  );
+  await assert.rejects(
+    buildEditedCopy([['config.json', '"const": "defaults"', '"const": "initialState"']]),
+    /settingsDefaults\.globalSettings: store\/settings\.js has no top-level const initialState holding an object/,
+  );
+});
+
 test('a link to a path without its parameters enters every route that only adds parameters to it', async () => {
   const map = await buildFixture();
   const from = (id) => screen(map, id).access.links.map((l) => l.from);
@@ -369,7 +435,7 @@ test('a guard that reads neither a setting nor a configured role identifier does
     ['config.json', '"roleIdentifiers": [\n    "memberRole",\n    "session[\'member.role\']"\n  ],\n', ''],
     ['client/src/components/SignIn.js', '{globalSettings.SYSTEM.HELP_LINK_ENABLED && (', '{showHelp && ('],
   ]);
-  assert.deepEqual(restrictedKinds(map), { '/lab#Lab': ['setting'], '/lab/result#LabResult': ['setting'] });
+  assert.deepEqual(restrictedKinds(map), { '/lab#Lab': ['setting'], '/lab/result#LabResult': ['setting'], '/admin/report#AdminReport': ['setting'] });
   assert.deepEqual(screen(map, '/admin/member#AdminMember').access.route, []);
   assert.deepEqual(screen(map, '/help#Help').access.links.map((l) => l.guards), [[{ guard: 'helpEnabled', kinds: ['setting'] }], []]);
 });
@@ -394,6 +460,7 @@ test('screens that link only to each other stay open', async () => {
     '/admin/member#AdminMember': ['role'],
     '/admin/group#AdminGroup': ['role'],
     '/admin/audit#AdminAudit': ['role'],
+    '/admin/report#AdminReport': ['role', 'setting'],
   });
 });
 
@@ -410,6 +477,7 @@ test('a back link does not open screens that are reached only through a guarded 
     '/lab#Lab': ['setting'],
     '/lab/result#LabResult': ['setting'],
     '/admin/audit#AdminAudit': ['role'],
+    '/admin/report#AdminReport': ['role', 'setting'],
   });
 });
 
@@ -426,7 +494,7 @@ for (const [name, use] of [
 
 test('entry screens come from redirects in the routes file, screens no link leads to, and the config', async () => {
   const map = await buildFixture();
-  assert.deepEqual(map.entries, [{ screen: '/signin#SignIn', reasons: [{ kind: 'redirect', file: 'Routes.js', line: 39 }, { kind: 'no-incoming-link' }] }]);
+  assert.deepEqual(map.entries, [{ screen: '/signin#SignIn', reasons: [{ kind: 'redirect', file: 'Routes.js', line: 41 }, { kind: 'no-incoming-link' }] }]);
   assert.deepEqual(map.unknownEntryPaths, []);
 
   const configured = await buildEditedCopy([['config.json', '"roleIdentifiers"', '"entryPaths": ["/help", "/gone"],\n  "roleIdentifiers"']]);
