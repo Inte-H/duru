@@ -21,8 +21,8 @@ traffic to learn from and "every screen under any configuration" is exactly what
 Early. The extractor handles a React Router client whose routes, API calls and settings reads follow
 consistent patterns. API calls are nodes of their own next to screens. Playwright, JUnit XML and Vitest
 JSON results attach to screens and calls through tags in their test names, and check scripts attach
-through the verdict lines they print. A review loop (a person marks gaps on the map, a coding agent writes
-the missing tests and regenerates the map) is planned but not built.
+through the verdict lines they print. A local review page lets a person mark gaps on screens; a task list
+for a coding agent is planned but not built.
 
 ## Usage
 
@@ -30,6 +30,7 @@ the missing tests and regenerates the map) is planned but not built.
 npm install
 npm run rebuild -- path/to/project-config.json   # map.json + tests.json
 npm run extract -- path/to/project-config.json   # map.json only
+node src/cli.mjs review path/to/project-config.json [--port 4400]   # review page on 127.0.0.1
 npm test
 ```
 
@@ -54,6 +55,9 @@ relative to the config file, except the files inside the client source (`routesF
   A folder is searched for `.json` files (Playwright, Vitest), `.xml` files (JUnit) or `.txt` and `.log`
   files (verdict); files in another format are skipped
 - `outDir` — where `map.json` and `tests.json` are written (default: the config's folder)
+- `marksDir` — folder where review marks are kept (default: `marks` in `outDir`)
+- `appUrl` — address of a running instance of the app; the review page links each screen without path
+  variables to it
 
 `map.json` lists screens with their route guards, the API calls reachable from each screen with the
 server match, the settings each screen reads, and links to other screens with the conditions guarding
@@ -116,6 +120,26 @@ The name runs up to the first `: ` and may contain spaces. The word right after 
 `— ` (an em dash; a plain hyphen does not count) is kept as `detail` so the reason for a failure or a
 pending result can be shown; for a word outside the table, `detail` is everything after the colon. Node
 tags go at the end of the line.
+
+## Review page
+
+`review` serves a local page that reads `map.json` and `tests.json` from `outDir` (run `rebuild` first) and
+writes only into the marks folder. The left column lists the screens with a "no tests" filter, the middle shows the
+chosen screen's tests grouped by depth, and the right holds the mark form, the screen's source location,
+route guards, links and settings reads.
+
+A mark targets a screen or one depth row of a screen and records a status (`needs-more`, `missing`,
+`fine`), a note, the author and the date. The author is `git config user.name` on the machine serving the
+page; when it is not set, the page asks for a name. Marks are never overwritten: marking a target again
+adds to its history, and the latest mark is its current state.
+
+Each mark is its own file, `<marksDir>/<screen>/<date>-<author>-<short ID>.json`, and saving a mark only
+creates a new file. Marks added on two machines therefore never touch the same file and merge in git without
+a conflict, and the file list of a pull request reads as which screens were marked, by whom and when. The
+screen folder is the screen ID with characters that file names cannot hold replaced by `_`; which screen a
+mark belongs to is read from the `target` inside the file, not from the folder. `rebuild` never touches the
+marks folder. A mark whose screen is gone from a rebuilt map stays where it is and shows up under
+"detached" until someone deals with it.
 
 ## License
 

@@ -40,13 +40,13 @@ condition on a link but not whether the server still had the API behind it; a re
 
 **Two files, joined on stable node IDs.**
 A generated `map.json` (nodes, guarded edges, calls per screen, tests per node with depth and status) and a
-separate `marks.json` (reviewer marks keyed by node or cell ID: status, note, author, date). Regeneration
+separate marks folder (one file per reviewer mark, keyed by node or cell ID: status, note, author, date). Regeneration
 rewrites the first and never touches the second. Node IDs come from route and component names, not DOM
 hashes, so they survive regeneration.
 
 **The review surface is replaceable.**
 Everything hard runs in the repository on the PC (extraction, the client/server join, test runs). The
-review page only renders `map.json` and writes `marks.json`. A local page is the default; a claude.ai
+review page only renders `map.json` and writes marks. A local page is the default; a claude.ai
 Artifact page can be one optional front end. Making the Artifact the architecture would tie the tool to
 claude.ai: its stored marks and its "send to Claude" comments are claude.ai features that only a Claude
 Code session can read.
