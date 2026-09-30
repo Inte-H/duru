@@ -1,0 +1,15 @@
+[checks] starting document checks against http://localhost:8080
+[checks] seeding 40 drafts
+VERDICT list paging: UPHOLDS — page size stays at 20 on every tab @screen:/document/:tab_draft_done_#DocumentList
+  VERDICT empty form save: FIXED — saving an empty form shows a validation message @screen:/document/:id#DocumentDetail
+VERDICT detail reload: HEALTHY — reload keeps the open tab @screen:/document/:id#DocumentDetail
+[checks] retrying submit twice
+VERDICT duplicate submit: REPRODUCES — a second click creates a second draft @screen:/document/:id#DocumentDetail
+VERDICT title length: VIOLATE — titles over 200 characters are cut without a warning @screen:/document/:id#DocumentDetail
+VERDICT sort by date: VIOLATES — sorting ignores the time of day @screen:/document/:tab_draft_done_#DocumentList
+VERDICT attachment preview: REGRESSED — the preview opens blank @screen:/document/:id#DocumentDetail
+VERDICT export: BROKEN — the exported file is empty @screen:/document/:tab_draft_done_#DocumentList
+VERDICT BATCH: part-a REPRODUCES(quadratic) · part-b linear @screen:/document/:tab_draft_done_#DocumentList
+VERDICT cleanup: HEALTHY — removed 40 drafts
+VERDICT teardown: FIXED — no leftover uploads
+[checks] done in 3.2s
