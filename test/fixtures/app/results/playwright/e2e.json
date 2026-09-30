@@ -188,15 +188,67 @@
           "column": 1
         }
       ]
+    },
+    {
+      "title": "document.spec.ts",
+      "file": "document.spec.ts",
+      "line": 0,
+      "column": 0,
+      "specs": [
+        {
+          "title": "rename is refused by the server @call:PUT:/api/v1/document/{documentId}/name",
+          "ok": false,
+          "tags": [
+            "call:PUT:/api/v1/document/{documentId}/name"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "unexpected"
+            }
+          ],
+          "id": "document.spec.ts-4",
+          "file": "document.spec.ts",
+          "line": 4,
+          "column": 1
+        },
+        {
+          "title": "deletes a document @call:DELETE:/api/v1/document/{documentId}",
+          "ok": true,
+          "tags": [
+            "call:DELETE:/api/v1/document/{documentId}"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "expected"
+            }
+          ],
+          "id": "document.spec.ts-12",
+          "file": "document.spec.ts",
+          "line": 12,
+          "column": 1
+        }
+      ]
     }
   ],
   "errors": [],
   "stats": {
     "startTime": "2026-09-30T00:00:00.000Z",
     "duration": 1200,
-    "expected": 4,
+    "expected": 5,
     "skipped": 1,
-    "unexpected": 1,
+    "unexpected": 2,
     "flaky": 1
   }
 }

@@ -19,10 +19,10 @@ traffic to learn from and "every screen under any configuration" is exactly what
 ## Status
 
 Early. The extractor handles a React Router client whose routes, API calls and settings reads follow
-consistent patterns. Playwright, JUnit XML and Vitest JSON results attach to screens through tags in their
-test names, and check scripts attach through the verdict lines they print. API calls as their own nodes and
-a review loop (a person marks gaps on the map, a coding agent writes the missing tests and regenerates the
-map) are planned but not built.
+consistent patterns. API calls are nodes of their own next to screens. Playwright, JUnit XML and Vitest
+JSON results attach to screens and calls through tags in their test names, and check scripts attach
+through the verdict lines they print. A review loop (a person marks gaps on the map, a coding agent writes
+the missing tests and regenerates the map) is planned but not built.
 
 ## Usage
 
@@ -57,11 +57,28 @@ them. Each screen has an ID made of its route path and component name (`/documen
 with spaces and `, ( ) & | !` replaced so it works as a JUnit tag too. Routes that end up with the same
 ID are listed under `duplicateIds`.
 
-A test declares the screen it covers by putting `@screen:<id>` in its title — for JUnit, in the test's
-or the test class's display name (`@DisplayName`), since `@Tag` annotations do not reach the result XML;
-for Vitest, in the test title, a `describe` title or the test's `tags` option. A test takes the depth of
-its result source unless it carries `@depth:<ui|api|render|code|data>`, which sets the depth for that
-test alone. `tests.json` lists the tests per screen, each with its own depth and status (pass, fail,
+Each API call is also a node under `calls`, with an ID of the form `<METHOD>:<path>`
+(`GET:/api/v1/document/{documentId}`). The server match decides the path:
+
+- `match` — the path as written in the server endpoint list, also kept as `server.path`, with the
+  endpoint list labels in `server.labels`
+- `method-mismatch` — the client's method with the server path (`server.path`); the server's entries are
+  in `server.candidates`
+- `none` — the client's URL without `apiPathPrefix`, starting with `/`
+- `unresolved` — the URL cannot be computed from the source, so there is no call node
+
+When several server paths fit one call, the one whose path variables and fixed names line up with the
+client URL wins, then the first in sorted order. The same character replacement as for screen IDs applies.
+Each call node lists its `method`, `path`, `server` match, the API functions that make it and the screens
+that reach it. Every endpoint under `apiFunctions` carries the `callId` of its node (`null` when unresolved),
+and a screen is marked `dead: true` when it reaches a call whose server match is `none`. An unresolved call
+alone does not make a screen dead.
+
+A test declares the node it covers by putting `@screen:<id>` or `@call:<id>` in its title — for JUnit, in
+the test's or the test class's display name (`@DisplayName`), since `@Tag` annotations do not reach the
+result XML; for Vitest, in the test title, a `describe` title or the test's `tags` option. A test takes the
+depth of its result source unless it carries `@depth:<ui|api|render|code|data>`, which sets the depth for
+that test alone. `tests.json` lists the tests per node ID, each with its own depth and status (pass, fail,
 pending; skipped and todo count as pending), the tags that point at IDs not on the map or name an unknown
 depth, how many tests carry no node tag, and configured result paths that do not exist yet.
 `test/fixtures/app` holds a small fake client with example results and a config.
