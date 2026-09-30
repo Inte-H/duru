@@ -66,12 +66,19 @@ relative to the config file, except the files inside the client source (`routesF
 
 `map.json` lists screens with their route guards, the API calls reachable from each screen with the
 server match, the settings each screen reads, and links to other screens with the conditions guarding
-them. A menu built from a settings list, where the route is picked by the first parameter of a `forEach` or
+them. A screen reaches the files its route component imports, directly or in turn, and the files of every
+component that wraps its route in the routes file, such as a layout with a side menu around a group of
+routes. The wrapper's API calls, settings reads and links therefore belong to each screen it wraps. A guard
+around the wrapper is a route guard of every screen inside it, so the wrapper's links count as coming from
+restricted screens and do not repeat that guard.
+
+A menu built from a settings list, where the route is picked by the first parameter of a `forEach` or
 `map` callback over the list (`MENUS.ADMIN?.LIST?.forEach((menu) => ... Option.ROUTE_PATH[menu])`), gives one
 link per entry of the list's default value when the list is read from a `settingsDefaults` root, directly or
 through local consts. Each of these links also carries the setting guard
 `globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT'`. Entries that are not route names are
 skipped, and a route picked by any other computed key is left out.
+
 Each screen has an ID made of its route path and component name (`/document/:id#DocumentDetail`),
 with spaces and `, ( ) & | !` replaced so it works as a JUnit tag too. Routes that end up with the same
 ID are listed under `duplicateIds`.
