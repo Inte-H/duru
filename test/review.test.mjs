@@ -6,6 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../src/config.mjs';
+import { chromium } from 'playwright-core';
 import { loadMarks } from '../src/marks.mjs';
 import { startReviewServer } from '../src/review.mjs';
 
@@ -161,3 +162,70 @@ test('requests another site could send through the browser are refused', async (
     }),
   );
 });
+
+const browserMissing = fs.existsSync(chromium.executablePath()) ? false : 'Chromium is not installed (npx playwright-core install chromium)';
+
+async function withPage(base, fn) {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    await page.goto(base);
+    await fn(page);
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+}
+
+for (const host of ['127.0.0.1', 'localhost']) {
+  test(`in a browser at ${host}, the list filters screens, a mark is saved as a file and is there after reloading`, { skip: browserMissing }, async () => {
+    await withRebuiltFixture({}, (config) =>
+      withServer(config, 'reviewer', (base) =>
+        withPage(base.replace('127.0.0.1', host), async (p) => {
+          await p.waitForSelector('#screen-list li');
+          assert.equal(await p.locator('#screen-list li').count(), 8);
+          assert.match(await p.textContent('#author'), /reviewer/);
+
+          await p.fill('#left input[type=search]', 'lab');
+          assert.deepEqual(await p.locator('#screen-list li .name > span:first-child').allTextContents(), ['/lab', '/lab/result']);
+          await p.fill('#left input[type=search]', '');
+          await p.check('#left input[type=checkbox]');
+          const noTests = await p.locator('#screen-list li').allTextContents();
+          assert.ok(noTests.length > 0 && noTests.every((t) => t.includes('테스트 없음')));
+          await p.uncheck('#left input[type=checkbox]');
+
+          await p.click('#screen-list li:has-text("/document/:id")');
+          assert.equal(await p.textContent('#center h3'), '/document/:id');
+          await p.click('#center tr:has-text("API")');
+          assert.match(await p.textContent('#right h2'), /API 깊이/);
+          assert.equal(await p.isDisabled('#right button.save'), true);
+          await p.click('#right .statuses button:has-text("더 필요")');
+          await p.fill('#right textarea', 'no API test yet');
+          await p.click('#right button.save');
+          await p.waitForSelector('#right .history li:has-text("no API test yet")');
+          assert.match(await p.textContent('#center tr.selected td.mark'), /더 필요/);
+          assert.deepEqual(loadMarks(config.marksDir).map((m) => [m.target, m.status, m.note, m.author]), [
+            [{ node: '/document/:id#DocumentDetail', depth: 'api' }, 'needs-more', 'no API test yet', 'reviewer'],
+          ]);
+
+          await p.click('#center tr:has-text("화면 전체")');
+          await p.click('#right .statuses button:has-text("충분")');
+          await p.click('#right button.save');
+          await p.waitForSelector('#screen-list li.selected .chip');
+          assert.equal(await p.textContent('#screen-list li.selected .chip'), '충분');
+
+          await p.reload();
+          await p.click('#screen-list li:has-text("/document/:id")');
+          await p.click('#center tr:has-text("API")');
+          assert.ok((await p.locator('#right .history li').allTextContents()).some((t) => t.includes('no API test yet')));
+
+          await p.emulateMedia({ colorScheme: 'dark' });
+          assert.notEqual(await p.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(255, 255, 255)');
+        }),
+      ),
+    );
+  });
+}
