@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { UNKNOWN } from './client.mjs';
+import { buildFlow } from './flow.mjs';
 import { addMark, classifyMarks, loadMarks } from './marks.mjs';
 import { DEPTHS } from './test-links.mjs';
 
@@ -34,6 +35,7 @@ export function reviewData(config, author) {
     map,
     tests,
     marks: classifyMarks(loadMarks(config.marksDir), map),
+    flow: buildFlow(map, tests),
     appUrl: config.appUrl ?? null,
     appLinks: Object.fromEntries(map.screens.map((s) => [s.id, appLink(config.appUrl, s.path)])),
     routesFile: config.routesFile,
