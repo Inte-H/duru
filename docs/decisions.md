@@ -56,32 +56,24 @@ Each target project's config, exported source, endpoint lists and generated maps
 The repository holds only generic code.
 
 **The first version maps screens and the API calls made from them.**
-- An action inside a screen is represented by an API call the screen makes, together with the function
-  that makes it and the conditions around it in the same file. The extractor already records these.
-- Deferred: controls that only change screen state (options chosen before a submit, dialogs), and
-  visibility conditions that cross files (role, document state, permission helpers). The map shows such
-  conditions as unresolved.
-- Menu items are links, so they already appear as screen-to-screen edges with their guards. Grouping
-  screens under a menu tree is deferred, as are roots without a screen (notification sending, file
-  conversion, third-party calls).
+Buttons, option controls, the menu tree and roots without a screen come later.
 Reason: most defects sit in actions, and a screen-only map shows a screen with a single render test as
 covered. API calls are the action unit the program can extract reproducibly and already joins with the
 server.
 
-**A test declares the node it covers in its title.**
-The title carries the node ID as a tag (`@screen:<id>`, `@call:<id>`). This works as a plain string in
-every runner; Playwright reads `@` words in a title as tags, and JUnit 5 can carry the same value in
-`@Tag`. Node IDs therefore contain no whitespace and none of `, ( ) & | !`, which JUnit forbids in tags.
+**A test declares the node it covers with a tag.**
+Test runners carry it in the title; standalone check scripts carry it on their verdict line.
 Reason: putting case IDs in test titles is the most common traceability practice; a sidecar file drifts
-when tests are moved or renamed. Recording which screens a test visited at run time can come later as a
+when tests are moved or renamed. A check script can print several verdicts, so the tag belongs to the
+verdict, not to the file. Recording which screens a test visited at run time can come later as a
 separate signal for "passed through but not asserted".
 
 **The review page has its own layout; prior art supplies ideas only.**
-First layout: on the left, the screen list with filters (no tests, dead, reachable only under a
-setting); in the middle, the selected screen's calls and its tests by depth; on the right, conditions,
-source locations and the mark form. A graph view comes later. Ideas taken: filtering to uncovered items
-(Katalon TrueTest), rejection reasons that survive regeneration (QA Wolf), coverage painted on the
-screen itself (Cypress UI Coverage).
+The data on this map (configuration conditions, dead screens, test depth) differs from what other tools
+show, so their layouts do not carry over.
+
+Scope, node ID rules, tag syntax, depth and status mapping, and the page layout are specified in the
+first-version PRD: https://github.com/Inte-H/duru/issues/1
 
 ## Why this is worth building — prior art (checked 2026-09-29)
 
@@ -129,4 +121,4 @@ On a React Router client with 45 routes:
 - **Order of the deferred layers.** Cross-file button conditions filled in by the agent, the menu tree,
   and roots without a screen all come after the first version; which comes first is not decided.
 
-Next step: write the PRD from this document, then split it into issues.
+Next step: split the first-version PRD into issues.
