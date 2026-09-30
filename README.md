@@ -19,9 +19,9 @@ traffic to learn from and "every screen under any configuration" is exactly what
 ## Status
 
 Early. The extractor handles a React Router client whose routes, API calls and settings reads follow
-consistent patterns, and Playwright tests attach to screens through tags in their titles. Other test
-formats, API calls as their own nodes, and a review loop (a person marks gaps on the map, a coding agent
-writes the missing tests and regenerates the map) are planned but not built.
+consistent patterns, and Playwright, JUnit XML and Vitest JSON results attach to screens through tags in
+their test names. API calls as their own nodes and a review loop (a person marks gaps on the map, a coding
+agent writes the missing tests and regenerates the map) are planned but not built.
 
 ## Usage
 
@@ -45,7 +45,9 @@ relative to the config file, except the files inside the client source (`routesF
 - `settingsRoots` — identifiers through which settings are read
 - `serverEndpoints`, `apiPathPrefix` — one or more server endpoint lists
   (`<label>\t<METHOD>\t<path>` per line, `{var}` for path variables)
-- `tests` — test results to attach, each `{ "format": "playwright", "path": <file or folder>, "depth": <ui|api|render|code|data> }`
+- `tests` — test results to attach, each `{ "format": <playwright|junit|vitest>, "path": <file or folder>, "depth": <ui|api|render|code|data> }`.
+  A folder is searched for `.json` files (Playwright, Vitest) or `.xml` files (JUnit); files in another
+  format are skipped
 - `outDir` — where `map.json` and `tests.json` are written (default: the config's folder)
 
 `map.json` lists screens with their route guards, the API calls reachable from each screen with the
@@ -54,10 +56,14 @@ them. Each screen has an ID made of its route path and component name (`/documen
 with spaces and `, ( ) & | !` replaced so it works as a JUnit tag too. Routes that end up with the same
 ID are listed under `duplicateIds`.
 
-A test declares the screen it covers by putting `@screen:<id>` in its title. `tests.json` lists the tests
-per screen with depth and status (pass, fail, pending; skipped counts as pending), the tags that point at
-IDs not on the map, how many tests carry no node tag, and configured result paths that do not exist yet. `test/fixtures/app` holds a small fake client
-with example results and a config.
+A test declares the screen it covers by putting `@screen:<id>` in its title — for JUnit, in the test's
+or the test class's display name (`@DisplayName`), since `@Tag` annotations do not reach the result XML;
+for Vitest, in the test title, a `describe` title or the test's `tags` option. A test takes the depth of
+its result source unless it carries `@depth:<ui|api|render|code|data>`, which sets the depth for that
+test alone. `tests.json` lists the tests per screen, each with its own depth and status (pass, fail,
+pending; skipped and todo count as pending), the tags that point at IDs not on the map or name an unknown
+depth, how many tests carry no node tag, and configured result paths that do not exist yet.
+`test/fixtures/app` holds a small fake client with example results and a config.
 
 ## License
 
