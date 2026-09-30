@@ -277,7 +277,6 @@ export async function extractClient(config) {
         if (!target || !p.isReferencedIdentifier()) return;
         if (p.findParent((a) => a === target.fnPath)) return;
         const outer = guardsOf(p, src);
-        if (outer.length === 0) return;
         for (const item of target.items) {
           item.inheritedGuards ??= [];
           item.inheritedGuards.push({ via: p.node.name, line: p.node.loc.start.line, guards: outer });
@@ -305,14 +304,23 @@ export async function extractClient(config) {
 
   // ---------- 라우트 파일: 화면 목록과 화면에 걸린 조건 ----------
 
+  const redirects = [];
+
   function extractScreens(routesFile) {
     const { src, ast } = parseFile(routesFile);
     const screens = [];
     traverse(ast, {
       JSXElement(p) {
         const opening = p.node.openingElement;
-        if (opening.name.type !== 'JSXIdentifier' || !config.routeElements.includes(opening.name.name)) return;
+        if (opening.name.type !== 'JSXIdentifier') return;
         const attr = (name) => p.get('openingElement.attributes').find((a) => a.node.name?.name === name);
+        if (config.redirectElements.includes(opening.name.name)) {
+          const toValue = attr('to')?.get('value');
+          const to = toValue && evaluate(toValue.isJSXExpressionContainer() ? toValue.get('expression') : toValue);
+          redirects.push({ to: typeof to === 'string' ? to : UNKNOWN, line: p.node.loc.start.line, guards: guardsOf(p, src) });
+          return;
+        }
+        if (!config.routeElements.includes(opening.name.name)) return;
         const pathAttr = attr('path');
         const compAttr = attr('component');
         if (!pathAttr || !compAttr) return;
@@ -370,5 +378,5 @@ export async function extractClient(config) {
     return { ...s, componentFile: rel(s.componentFile), closureSize: files.length, apiCalls, settingReads, links };
   });
 
-  return { screens, apiFunctions };
+  return { screens, apiFunctions, redirects };
 }

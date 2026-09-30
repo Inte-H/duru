@@ -44,6 +44,10 @@ relative to the config file, except the files inside the client source (`routesF
   stand-in source for outside packages they import
 - `apiModules`, `passThroughCalls` — where API functions live and which wrappers pass a URL through
 - `settingsRoots` — identifiers through which settings are read
+- `roleIdentifiers` — identifiers that hold the user's role (optional, default none); a guard that uses one
+  of them as a whole identifier is a role condition
+- `redirectElements`, `entryPaths` — how fallback redirects are declared in the routes file (default
+  `Redirect`), and route paths of further screens users start from when the code does not show them
 - `serverEndpoints`, `apiPathPrefix` — one or more server endpoint lists
   (`<label>\t<METHOD>\t<path>` per line, `{var}` for path variables)
 - `tests` — test results to attach, each `{ "format": <playwright|junit|vitest|verdict>, "path": <file or folder>, "depth": <ui|api|render|code|data> }`.
@@ -73,6 +77,22 @@ Each call node lists its `method`, `path`, `server` match, the API functions tha
 that reach it. Every endpoint under `apiFunctions` carries the `callId` of its node (`null` when unresolved),
 and a screen is marked `dead: true` when it reaches a call whose server match is `none`. An unresolved call
 alone does not make a screen dead.
+
+Each screen's `access` says whether it opens only under a setting or a role. A guard that reads a member of
+a `settingsRoots` identifier is a `setting` condition, one that uses a `roleIdentifiers` identifier is a
+`role` condition (it can be both), and any other guard (UI state such as `selected.length > 0`) does not
+block. The walk starts from entry screens, listed under `entries` with their `reasons`: the targets of
+redirects in the routes file that no setting or role guards (`redirect`), screens no link leads to (`no-incoming-link`, such as pages
+opened from an e-mail), and `entryPaths` (`config`; paths that match no route go to `unknownEntryPaths`).
+A screen is open when an entry screen reaches it through links and routes without such a guard, and
+`restricted` otherwise; a screen no entry screen reaches at all stays open, since nothing shows what would
+block it. A link counts as guarded when it has such a guard itself, or when every place that uses the
+handler it sits in is guarded. A link enters the route with the
+same path, or, when there is none, every route that only adds parameter segments to it (`/document` enters
+`/document/:id`); links to a partly unknown path, and a screen's links to itself, are left out. `access`
+lists `kinds` (`setting`, `role`), the blocking `route` guards, and every incoming link in `links` with the
+screen it comes `from`, its source location, its blocking `guards` (`via` names the handler an inherited
+guard came from) and `fromRestricted`.
 
 A test declares the node it covers by putting `@screen:<id>` or `@call:<id>` in its title — for JUnit, in
 the test's or the test class's display name (`@DisplayName`), since `@Tag` annotations do not reach the
