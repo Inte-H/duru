@@ -1,0 +1,94 @@
+{
+  "numTotalTestSuites": 3,
+  "numPassedTestSuites": 0,
+  "numFailedTestSuites": 3,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 6,
+  "numPassedTests": 3,
+  "numFailedTests": 1,
+  "numPendingTests": 1,
+  "numTodoTests": 1,
+  "startTime": 1767603600000,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Home @screen:/home#Home"],
+          "fullName": "Home @screen:/home#Home renders the list",
+          "status": "passed",
+          "title": "renders the list",
+          "duration": 0.8,
+          "failureMessages": [],
+          "location": { "line": 4, "column": 3 },
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": ["Home @screen:/home#Home", "filters"],
+          "fullName": "Home @screen:/home#Home filters keeps the draft filter @depth:render",
+          "status": "failed",
+          "title": "keeps the draft filter @depth:render",
+          "duration": 2.9,
+          "failureMessages": ["AssertionError: expected 1 to be 2 // Object.is equality"],
+          "location": { "line": 9, "column": 5 },
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "remembers the last user",
+          "status": "passed",
+          "title": "remembers the last user",
+          "duration": 0.1,
+          "failureMessages": [],
+          "location": { "line": 14, "column": 1 },
+          "meta": {},
+          "tags": ["screen:/signin#SignIn"],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "searches help @screen:/help#Help",
+          "status": "skipped",
+          "title": "searches help @screen:/help#Help",
+          "failureMessages": [],
+          "location": { "line": 17, "column": 6 },
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "shows the lab notice @screen:/lab#Lab",
+          "status": "todo",
+          "title": "shows the lab notice @screen:/lab#Lab",
+          "failureMessages": [],
+          "location": { "line": 18, "column": 6 },
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "formats a date @depth:api",
+          "status": "passed",
+          "title": "formats a date @depth:api",
+          "duration": 0.1,
+          "failureMessages": [],
+          "location": { "line": 20, "column": 1 },
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1767603600050,
+      "endTime": 1767603600060,
+      "status": "failed",
+      "message": "",
+      "name": "/work/app/src/home/home.test.js"
+    }
+  ]
+}
