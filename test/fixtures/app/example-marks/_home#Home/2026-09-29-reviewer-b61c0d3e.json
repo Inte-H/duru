@@ -1,0 +1,10 @@
+{
+  "id": "b61c0d3e-2a4f-4b89-9e70-1c8d5f3a6b24",
+  "target": {
+    "node": "/home#Home"
+  },
+  "status": "fine",
+  "note": "Archiving is covered by the API test now.",
+  "author": "reviewer",
+  "date": "2026-09-29T01:00:00.000Z"
+}

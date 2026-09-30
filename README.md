@@ -21,8 +21,8 @@ traffic to learn from and "every screen under any configuration" is exactly what
 Early. The extractor handles a React Router client whose routes, API calls and settings reads follow
 consistent patterns. API calls are nodes of their own next to screens. Playwright, JUnit XML and Vitest
 JSON results attach to screens and calls through tags in their test names, and check scripts attach
-through the verdict lines they print. A local review page lets a person mark gaps on screens; a task list
-for a coding agent is planned but not built.
+through the verdict lines they print. A local review page lets a person mark gaps on screens, and a task list
+hands the marked screens to a coding agent.
 
 ## Usage
 
@@ -31,6 +31,7 @@ npm install
 npm run rebuild -- path/to/project-config.json   # map.json + tests.json
 npm run extract -- path/to/project-config.json   # map.json only
 node src/cli.mjs review path/to/project-config.json [--port 4400]   # review page on 127.0.0.1
+node src/cli.mjs tasks path/to/project-config.json > tasks.md        # task list for a coding agent
 npm test
 ```
 
@@ -140,6 +141,16 @@ screen folder is the screen ID with characters that file names cannot hold repla
 mark belongs to is read from the `target` inside the file, not from the folder. `rebuild` never touches the
 marks folder. A mark whose screen is gone from a rebuilt map stays where it is and shows up under
 "detached" until someone deals with it.
+
+## Task list
+
+`tasks` prints, as Markdown on standard output, every screen whose current mark on the whole screen or on
+one depth is `needs-more` or `missing`. Marks whose current state is `fine` and detached marks are left out.
+Each screen comes with its open marks and notes, the component file and route line, the app address when
+`appUrl` is set, the settings and roles it needs and where they are checked, the API calls it makes with
+their tests, and the tests already attached with their depth and status. The list starts with how to tag
+new tests so that they attach after a `rebuild`. Adding tests does not take a screen off the list; a
+reviewer marking it `fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
 
 ## License
 
