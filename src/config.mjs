@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { READERS } from './test-links.mjs';
+import { DEPTHS, READERS } from './test-links.mjs';
 
-export const DEPTHS = ['ui', 'api', 'render', 'code', 'data'];
 const TEST_FORMATS = Object.keys(READERS);
 
 export function loadConfig(configPath) {
