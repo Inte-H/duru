@@ -129,6 +129,11 @@ export async function extractClient(config) {
       case 'ObjectExpression': {
         const obj = {};
         nodePath.get('properties').forEach((p) => {
+          if (p.isSpreadElement()) {
+            const spread = evaluate(p.get('argument'));
+            if (spread && typeof spread === 'object') Object.assign(obj, spread);
+            return;
+          }
           if (p.node.type !== 'ObjectProperty' || p.node.computed) return;
           const key = p.node.key.name ?? p.node.key.value;
           obj[key] = evaluate(p.get('value'));
