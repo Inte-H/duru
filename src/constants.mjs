@@ -9,7 +9,7 @@ const PARSER_PLUGINS = ['jsx', 'classProperties', 'optionalChaining', 'nullishCo
 
 // 상수 모듈은 브라우저 전역에 기대므로 최소한의 window·document 를 깔고 실제로 실행해 값을 얻는다.
 export async function loadConstants(config) {
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'geumul-'));
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'duru-'));
   const copied = new Map();
   const stubs = config.constantStubs ?? {};
 

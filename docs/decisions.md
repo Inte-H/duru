@@ -3,7 +3,7 @@
 Early-stage record of what has been decided, why, and what is still open. Read this before writing the
 PRD or changing the extractor's output shape.
 
-## The loop geumul is for
+## The loop duru is for
 
 1. Build a screen map of an app: entry points → menus → screens → buttons/actions, covering every screen
    reachable under **any** configuration value, and flagging dead screens (the screen calls an API the
@@ -77,7 +77,7 @@ Missing everywhere:
 4. Reviewer marks keyed to stable node IDs that an external agent can read.
 
 1 and 2 are missing because every existing map is observed from one running instance. That is the gap
-geumul targets.
+duru targets.
 
 Reusable pieces: Playwright and its MCP/test agents for confirmation crawls and test generation;
 springdoc-openapi or an existing endpoint inventory for the server side; Cypress UI Coverage's
