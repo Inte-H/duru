@@ -147,6 +147,18 @@ test('the page reports a missing map instead of serving empty data', async () =>
   }
 });
 
+test('the flow grown from one screen is served for that screen, and an unknown screen is not found', async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const res = await fetch(`${base}/api/flow?from=${encodeURIComponent('/document/:tab_draft_done_#DocumentList')}`);
+      assert.equal(res.status, 200);
+      const { roots } = await res.json();
+      assert.deepEqual([roots[0].id, ...roots[0].children.map((c) => c.id)], ['/document/:tab_draft_done_#DocumentList', '/document/:id#DocumentDetail']);
+      assert.equal((await fetch(`${base}/api/flow?from=${encodeURIComponent('/nowhere#Nowhere')}`)).status, 404);
+    }),
+  );
+});
+
 test('requests another site could send through the browser are refused', async () => {
   await withRebuiltFixture({}, (config) =>
     withServer(config, 'reviewer', async (base) => {

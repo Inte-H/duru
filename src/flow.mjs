@@ -6,7 +6,8 @@ const countOf = (tests) => {
 
 // 진입 화면에서 너비 우선으로 링크를 따라가며 화면마다 처음 발견한 위치에 한 번만 둔다.
 // 이미 놓인 화면으로 가는 링크는 옮겨 그리지 않고 출발 노드의 jumps 에 남긴다.
-export function buildFlow(map, tests) {
+// from 을 주면 진입 화면 대신 그 화면을 루트로 트리를 다시 만들고, 닿지 않는 화면은 모으지 않는다.
+export function buildFlow(map, tests, { from } = {}) {
   const byId = new Map(map.screens.map((s) => [s.id, s]));
   const outgoing = new Map(map.screens.map((s) => [s.id, new Map()]));
   for (const target of map.screens) {
@@ -73,6 +74,10 @@ export function buildFlow(map, tests) {
     return grow(roots);
   };
 
+  if (from !== undefined) {
+    if (!byId.has(from)) throw new Error(`unknown screen "${from}"`);
+    return { roots: plant([from]), unreached: [] };
+  }
   const roots = plant((map.entries ?? []).map((e) => e.screen));
   const unreached = [];
   for (const s of map.screens) if (!placed.has(s.id)) unreached.push(...plant([s.id]));
