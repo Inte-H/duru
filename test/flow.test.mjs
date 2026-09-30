@@ -26,6 +26,7 @@ test('the flow starts at the entry screens and places each screen once, with the
     '    /lab [globalSettings.SYSTEM.LAB_ENABLED]',
     '      /lab/result',
     "    /admin/audit [session['member.role'] === 'AUDITOR']",
+    "    /admin/report [globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT' & ['ADMIN', 'OWNER'].indexOf(session['member.role']) > -1 & MENUS.ADMIN]",
     '  /help [globalSettings.SYSTEM.HELP_LINK_ENABLED]',
   ]);
   assert.deepEqual(flow.unreached, []);

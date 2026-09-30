@@ -157,6 +157,8 @@ export async function extractClient(config) {
       }
       case 'Identifier':
         return evaluateIdentifier(nodePath.scope, node.name);
+      case 'ArrayExpression':
+        return nodePath.get('elements').map((e) => (e.node ? evaluate(e) : undefined));
       case 'ObjectExpression': {
         const obj = {};
         nodePath.get('properties').forEach((p) => {
@@ -187,6 +189,58 @@ export async function extractClient(config) {
     if (!binding || binding.kind !== 'const' || !binding.path.isVariableDeclarator()) return undefined;
     const init = binding.path.get('init');
     return init.node ? evaluate(init) : undefined;
+  }
+
+  function loadSettingsDefaults() {
+    const values = {};
+    for (const [root, { file, const: name }] of Object.entries(config.settingsDefaults ?? {})) {
+      const { ast } = parseFile(path.join(config.srcRoot, file));
+      let init = null;
+      traverse(ast, {
+        VariableDeclarator(p) {
+          if (p.parent.kind !== 'const' || !p.scope.path.isProgram() || !p.get('id').isIdentifier({ name })) return;
+          if (p.get('init').isObjectExpression()) init = p.get('init');
+          p.stop();
+        },
+      });
+      if (!init) throw new Error(`settingsDefaults.${root}: ${file} has no top-level const ${name} holding an object`);
+      values[root] = evaluate(init);
+    }
+    return values;
+  }
+
+  const settingsDefaults = loadSettingsDefaults();
+
+  // MENUS.ADMIN?.LIST → globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST
+  function settingsPath(nodePath, seen = new Set()) {
+    const chain = memberChain(nodePath.node);
+    if (!chain) return null;
+    if (Object.hasOwn(settingsDefaults, chain[0])) return chain;
+    const binding = nodePath.scope.getBinding(chain[0]);
+    if (binding?.kind !== 'const' || seen.has(binding) || !binding.path.isVariableDeclarator() || !binding.path.get('id').isIdentifier()) return null;
+    seen.add(binding);
+    const init = binding.path.get('init');
+    const base = init.node && settingsPath(init, seen);
+    return base ? [...base, ...chain.slice(1)] : null;
+  }
+
+  function listedRoutes(p) {
+    if (memberChain(p.node.object)?.join('.') !== config.routeConstant) return [];
+    const key = p.get('property');
+    const binding = key.isIdentifier() && key.scope.getBinding(key.node.name);
+    if (binding?.kind !== 'param' || binding.path.listKey !== 'params' || binding.path.key !== 0) return [];
+    const fn = binding.path.parentPath;
+    const call = fn.parentPath;
+    if (!(call.isCallExpression() || call.isOptionalCallExpression()) || fn.listKey !== 'arguments' || fn.key !== 0) return [];
+    const callee = call.get('callee');
+    if (!(callee.isMemberExpression() || callee.isOptionalMemberExpression()) || callee.node.computed) return [];
+    if (!['forEach', 'map'].includes(callee.node.property.name)) return [];
+    const chain = settingsPath(callee.get('object'));
+    const list = chain?.slice(1).reduce((v, k) => v?.[k], settingsDefaults[chain[0]]);
+    if (!Array.isArray(list)) return [];
+    return [...new Set(list)]
+      .filter((entry) => typeof entry === 'string' && Object.hasOwn(routeValues, entry))
+      .map((entry) => ({ route: entry, guard: `${chain.join('.')} includes '${entry}'` }));
   }
 
   // ---------- API 모듈: 내보낸 함수마다 호출하는 endpoint ----------
@@ -253,8 +307,8 @@ export async function extractClient(config) {
     const localFnRefs = new Map();
     const inits = initsOf(path.relative(config.srcRoot, file));
 
-    function record(kind, entry, nodePath) {
-      const guards = guardsOf(nodePath, src, inits);
+    function record(kind, entry, nodePath, ownGuards = []) {
+      const guards = [...ownGuards, ...guardsOf(nodePath, src, inits)];
       const owner = enclosingFunctionName(nodePath);
       const item = { ...entry, line: nodePath.node.loc.start.line, guards };
       facts[kind].push(item);
@@ -298,7 +352,10 @@ export async function extractClient(config) {
         const parent = p.parentPath;
         if ((parent.isMemberExpression() || parent.isOptionalMemberExpression()) && parent.node.object === p.node) return;
         const chain = memberChain(p.node);
-        if (!chain) return;
+        if (!chain) {
+          if (p.node.computed) for (const r of listedRoutes(p)) record('routeRefs', { route: r.route }, p, [r.guard]);
+          return;
+        }
         if (settingsRoots.has(chain[0]) && chain.length >= 3) {
           record('settingReads', { key: chain.slice(1).join('.') }, p);
         } else if (chain[0] === routeRoot && chain.length === routeRest.length + 2 && routeRest.every((k, i) => chain[i + 1] === k)) {

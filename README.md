@@ -39,13 +39,17 @@ Requires Node 22 or later.
 
 The project config lives **outside this repository** next to the target project's data. Paths in it are
 relative to the config file, except the files inside the client source (`routesFile`, `constants`,
-`apiModules`), which are relative to `srcRoot`. It names:
+`apiModules`, `settingsDefaults`), which are relative to `srcRoot`. It names:
 
 - `srcRoot`, `routesFile`, `routeElements`, `routeConstant` — the client source and how routes are declared
 - `constants`, `constantStubs` — modules evaluated for route paths and API endpoint definitions, and
   stand-in source for outside packages they import
 - `apiModules`, `passThroughCalls` — where API functions live and which wrappers pass a URL through
 - `settingsRoots` — identifiers through which settings are read
+- `settingsDefaults` — where the default values of a settings root are written (optional), as
+  `{ "globalSettings": { "file": "store/settings.js", "const": "defaults" } }`: the object literal that a
+  top-level `const` of that name in the file holds, such as a reducer's initial state. Changes the file makes to
+  it afterwards are not seen. The root must also be listed in `settingsRoots`
 - `roleIdentifiers` — where the user's role is read (optional, default none): an identifier (`memberRole`) or
   one member of an object (`workspace['member.role']`)
 - `redirectElements`, `entryPaths` — how fallback redirects are declared in the routes file (default
@@ -62,7 +66,13 @@ relative to the config file, except the files inside the client source (`routesF
 
 `map.json` lists screens with their route guards, the API calls reachable from each screen with the
 server match, the settings each screen reads, and links to other screens with the conditions guarding
-them. Each screen has an ID made of its route path and component name (`/document/:id#DocumentDetail`),
+them. A menu built from a settings list, where the route is picked by the first parameter of a `forEach` or
+`map` callback over the list (`MENUS.ADMIN?.LIST?.forEach((menu) => ... Option.ROUTE_PATH[menu])`), gives one
+link per entry of the list's default value when the list is read from a `settingsDefaults` root, directly or
+through local consts. Each of these links also carries the setting guard
+`globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST includes 'ADMIN_REPORT'`. Entries that are not route names are
+skipped, and a route picked by any other computed key is left out.
+Each screen has an ID made of its route path and component name (`/document/:id#DocumentDetail`),
 with spaces and `, ( ) & | !` replaced so it works as a JUnit tag too. Routes that end up with the same
 ID are listed under `duplicateIds`.
 

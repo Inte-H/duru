@@ -24,12 +24,18 @@ export function loadConfig(configPath) {
     return { ...t, path: at(t.path) };
   });
   (raw.roleIdentifiers ?? []).forEach(parseRoleEntry);
+  const settingsDefaults = raw.settingsDefaults ?? {};
+  for (const [root, entry] of Object.entries(settingsDefaults)) {
+    if (!(raw.settingsRoots ?? []).includes(root)) throw new Error(`settingsDefaults root "${root}" is not listed in settingsRoots`);
+    if (typeof entry?.file !== 'string' || typeof entry?.const !== 'string') throw new Error(`settingsDefaults.${root} needs "file" and "const"`);
+  }
   const outDir = at(raw.outDir ?? '.');
   return {
     ...raw,
     configDir,
     srcRoot: at(raw.srcRoot),
     roleIdentifiers: raw.roleIdentifiers ?? [],
+    settingsDefaults,
     redirectElements: raw.redirectElements ?? ['Redirect'],
     entryPaths: raw.entryPaths ?? [],
     serverEndpoints: [raw.serverEndpoints].flat().map(at),
