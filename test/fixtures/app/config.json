@@ -19,7 +19,8 @@
     "globalSettings"
   ],
   "roleIdentifiers": [
-    "memberRole"
+    "memberRole",
+    "session['member.role']"
   ],
   "apiPathPrefix": "/",
   "serverEndpoints": [
