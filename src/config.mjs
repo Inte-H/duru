@@ -13,6 +13,7 @@ export function loadConfig(configPath) {
     if (!DEPTHS.includes(t.depth)) throw new Error(`unknown depth "${t.depth}" for ${t.path} (expected one of ${DEPTHS.join(', ')})`);
     return { ...t, path: at(t.path) };
   });
+  const outDir = at(raw.outDir ?? '.');
   return {
     ...raw,
     configDir,
@@ -21,7 +22,8 @@ export function loadConfig(configPath) {
     redirectElements: raw.redirectElements ?? ['Redirect'],
     entryPaths: raw.entryPaths ?? [],
     serverEndpoints: [raw.serverEndpoints].flat().map(at),
-    outDir: at(raw.outDir ?? '.'),
+    outDir,
+    marksDir: raw.marksDir ? at(raw.marksDir) : path.join(outDir, 'marks'),
     tests,
   };
 }
