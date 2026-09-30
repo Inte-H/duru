@@ -17,9 +17,17 @@ test('rebuild writes map.json and tests.json to the configured output folder and
     const map = JSON.parse(fs.readFileSync(path.join(copy, 'out/map.json'), 'utf8'));
     const links = JSON.parse(fs.readFileSync(path.join(copy, 'out/tests.json'), 'utf8'));
     assert.equal(map.screens.length, 7);
-    assert.deepEqual(Object.keys(links.nodes).sort(), ['/admin/member#AdminMember', '/document/:id#DocumentDetail', '/help#Help', '/home#Home', '/lab#Lab', '/signin#SignIn']);
+    assert.deepEqual(Object.keys(links.nodes).sort(), [
+      '/admin/member#AdminMember',
+      '/document/:id#DocumentDetail',
+      '/document/:tab_draft_done_#DocumentList',
+      '/help#Help',
+      '/home#Home',
+      '/lab#Lab',
+      '/signin#SignIn',
+    ]);
     assert.match(stdout, /^screens 7 \|/m);
-    assert.match(stdout, /^screens with tests 6\/7 \| tags pointing outside the map 2 \| tests without a node tag 3$/m);
+    assert.match(stdout, /^screens with tests 7\/7 \| tags pointing outside the map 2 \| tests without a node tag 6$/m);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
   }
