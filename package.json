@@ -1,7 +1,7 @@
 {
   "name": "duru",
   "version": "1.0.0",
-  "description": "A net that catches every screen of your app — computes a screen map from source, including screens reachable only under certain settings and screens whose backing API is gone",
+  "description": "Every screen of your app, under every configuration — computes a screen map from source, including screens reachable only under certain settings and screens whose backing API is gone",
   "scripts": {
     "extract": "node src/extract.mjs"
   },
