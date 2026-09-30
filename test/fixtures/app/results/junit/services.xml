@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="services" tests="4" failures="0" errors="1" skipped="0" time="0.4">
+  <testsuite name="Document service" tests="2" skipped="0" failures="0" errors="0" time="0.2">
+    <properties/>
+    <testcase name="opens a document @screen:/document/:id#DocumentDetail" classname="com.example.document.DocumentServiceTest" time="0.12"/>
+    <testcase name="sends the share mail" classname="com.example.document.DocumentServiceTest" time="0.08"/>
+    <system-out><![CDATA[]]></system-out>
+  </testsuite>
+  <testsuite name="Help service" tests="2" skipped="0" failures="0" errors="1" time="0.2">
+    <properties/>
+    <testcase name="loads the help index @screen:/help#Help @depth:e2e" classname="com.example.help.HelpServiceTest" time="0.2">
+      <error message="connection refused" type="java.net.ConnectException">java.net.ConnectException: connection refused</error>
+    </testcase>
+    <testcase name="links the member page @screen:/admin/member#AdminMember" classname="com.example.help.HelpServiceTest" time="0.0"/>
+    <system-out><![CDATA[]]></system-out>
+  </testsuite>
+</testsuites>

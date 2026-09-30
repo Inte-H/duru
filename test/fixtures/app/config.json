@@ -28,6 +28,16 @@
       "format": "playwright",
       "path": "results/playwright",
       "depth": "ui"
+    },
+    {
+      "format": "junit",
+      "path": "results/junit",
+      "depth": "api"
+    },
+    {
+      "format": "vitest",
+      "path": "results/vitest",
+      "depth": "code"
     }
   ],
   "outDir": "out"
