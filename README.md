@@ -19,9 +19,10 @@ traffic to learn from and "every screen under any configuration" is exactly what
 ## Status
 
 Early. The extractor handles a React Router client whose routes, API calls and settings reads follow
-consistent patterns, and Playwright, JUnit XML and Vitest JSON results attach to screens through tags in
-their test names. API calls as their own nodes and a review loop (a person marks gaps on the map, a coding
-agent writes the missing tests and regenerates the map) are planned but not built.
+consistent patterns. Playwright, JUnit XML and Vitest JSON results attach to screens through tags in their
+test names, and check scripts attach through the verdict lines they print. API calls as their own nodes and
+a review loop (a person marks gaps on the map, a coding agent writes the missing tests and regenerates the
+map) are planned but not built.
 
 ## Usage
 
@@ -45,9 +46,9 @@ relative to the config file, except the files inside the client source (`routesF
 - `settingsRoots` — identifiers through which settings are read
 - `serverEndpoints`, `apiPathPrefix` — one or more server endpoint lists
   (`<label>\t<METHOD>\t<path>` per line, `{var}` for path variables)
-- `tests` — test results to attach, each `{ "format": <playwright|junit|vitest>, "path": <file or folder>, "depth": <ui|api|render|code|data> }`.
-  A folder is searched for `.json` files (Playwright, Vitest) or `.xml` files (JUnit); files in another
-  format are skipped
+- `tests` — test results to attach, each `{ "format": <playwright|junit|vitest|verdict>, "path": <file or folder>, "depth": <ui|api|render|code|data> }`.
+  A folder is searched for `.json` files (Playwright, Vitest), `.xml` files (JUnit) or `.txt` and `.log`
+  files (verdict); files in another format are skipped
 - `outDir` — where `map.json` and `tests.json` are written (default: the config's folder)
 
 `map.json` lists screens with their route guards, the API calls reachable from each screen with the
@@ -64,6 +65,20 @@ test alone. `tests.json` lists the tests per screen, each with its own depth and
 pending; skipped and todo count as pending), the tags that point at IDs not on the map or name an unknown
 depth, how many tests carry no node tag, and configured result paths that do not exist yet.
 `test/fixtures/app` holds a small fake client with example results and a config.
+
+A check script that is not a test framework reports through verdict lines in its output, one test per line;
+other lines are ignored:
+
+```
+VERDICT empty form save: FIXED — saving an empty form shows a message @screen:/document/:id#DocumentDetail
+```
+
+The name runs up to the first `: ` and may contain spaces. The word right after it decides the status:
+`UPHOLDS`, `FIXED`, `HEALTHY` pass; `REPRODUCES`, `VIOLATE`, `VIOLATES`, `REGRESSED`, `BROKEN` fail;
+`INCONCLUSIVE`, `KNOWN_DROP`, `ENTRY_HEALTHY`, `PARTIAL` and any other word are pending. The text after
+`— ` (an em dash; a plain hyphen does not count) is kept as `detail` so the reason for a failure or a
+pending result can be shown; for a word outside the table, `detail` is everything after the colon. Node
+tags go at the end of the line.
 
 ## License
 

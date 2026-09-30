@@ -37,7 +37,7 @@ test('tags pointing outside the map and tests without a node tag are reported se
     links.unknownTags.map((u) => `${u.tag} ${u.test.file}:${u.test.line}`),
     ['screen:/settings#Settings home.spec.ts:26', 'depth:e2e com.example.help.HelpServiceTest:null'],
   );
-  assert.equal(links.untaggedCount, 3);
+  assert.equal(links.untaggedCount, 6);
   assert.equal(Object.keys(links.nodes).includes('/settings#Settings'), false);
   assert.deepEqual(links.missingSources, []);
 });
@@ -79,10 +79,10 @@ test('tests of several formats on one node each carry their own depth', () => {
 });
 
 test('only tests tagged with a known @depth come out with a depth other than the configured one', () => {
-  const configured = Object.fromEntries(config.tests.map((s) => [s.format, s.depth]));
+  const configured = (t) => config.tests.find((s) => path.join(config.configDir, t.source).startsWith(s.path)).depth;
   const overridden = Object.values(links.nodes)
     .flat()
-    .filter((t) => t.depth !== configured[t.format])
+    .filter((t) => t.depth !== configured(t))
     .map((t) => `${t.format} ${t.depth} ${t.title}`);
   assert.deepEqual(overridden, [
     'junit data Home service @screen:/home#Home › moves a draft & keeps the list order @depth:data',

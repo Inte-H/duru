@@ -38,6 +38,16 @@
       "format": "vitest",
       "path": "results/vitest",
       "depth": "code"
+    },
+    {
+      "format": "verdict",
+      "path": "results/verdict/documents",
+      "depth": "api"
+    },
+    {
+      "format": "verdict",
+      "path": "results/verdict/storage",
+      "depth": "data"
     }
   ],
   "outDir": "out"
