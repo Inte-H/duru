@@ -2,14 +2,17 @@ import { UNKNOWN } from './client.mjs';
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function guardKinds(config) {
+function guardKinds(config, guardInits) {
   const alt = (names) => names.map(escapeRegExp).join('|');
   const rules = [];
   const roles = config.roleIdentifiers ?? [];
   if (roles.length) rules.push(['role', new RegExp(`(?<![\\w$])(?:${alt(roles)})(?![\\w$])`)]);
   const settings = config.settingsRoots ?? [];
   if (settings.length) rules.push(['setting', new RegExp(`(?<![\\w$])(?:${alt(settings)})\\s*\\??\\.`)]);
-  return (guard) => rules.filter(([, re]) => re.test(guard)).map(([kind]) => kind);
+  return (guard, file) => {
+    const texts = [guard, ...(guardInits.get(file)?.get(guard) ?? [])];
+    return rules.filter(([, re]) => texts.some((t) => re.test(t))).map(([kind]) => kind);
+  };
 }
 
 function linkTargets(screens) {
@@ -26,22 +29,22 @@ function linkTargets(screens) {
   };
 }
 
-export function screenAccess(screens, redirects, config) {
-  const kindsOf = guardKinds(config);
-  const blocking = (guards, via) =>
+export function screenAccess(screens, redirects, config, guardInits) {
+  const kindsOf = guardKinds(config, guardInits);
+  const blocking = (guards, file, via) =>
     guards.flatMap((guard) => {
-      const kinds = kindsOf(guard);
+      const kinds = kindsOf(guard, file);
       return kinds.length ? [{ guard, kinds, ...(via ? { via } : {}) }] : [];
     });
 
-  const route = screens.map((s) => blocking(s.routeGuards));
+  const route = screens.map((s) => blocking(s.routeGuards, config.routesFile));
   const incoming = screens.map(() => []);
   const outgoing = screens.map(() => []);
   const targetsOf = linkTargets(screens);
   screens.forEach((s, from) => {
     for (const l of s.links) {
-      const own = blocking(l.guards);
-      const uses = (l.inheritedGuards ?? []).map((h) => blocking(h.guards, h.via));
+      const own = blocking(l.guards, l.file);
+      const uses = (l.inheritedGuards ?? []).map((h) => blocking(h.guards, l.file, h.via));
       const guards = own.length || (uses.length && uses.every((u) => u.length)) ? [...own, ...uses.flat()] : [];
       for (const to of targetsOf(l.to)) {
         if (to === from) continue;
@@ -55,7 +58,7 @@ export function screenAccess(screens, redirects, config) {
   const indices = screens.map((_, i) => i);
   const reasons = screens.map(() => []);
   for (const r of redirects) {
-    if (blocking(r.guards).length) continue;
+    if (blocking(r.guards, config.routesFile).length) continue;
     for (const i of targetsOf(r.to)) reasons[i].push({ kind: 'redirect', file: config.routesFile, line: r.line });
   }
   for (const i of indices) if (incoming[i].length === 0) reasons[i].push({ kind: 'no-incoming-link' });

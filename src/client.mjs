@@ -33,21 +33,47 @@ function sliceText(src, node) {
   return text.length > GUARD_TEXT_LIMIT ? text.slice(0, GUARD_TEXT_LIMIT) + '…' : text;
 }
 
+const initCache = new WeakMap();
+
+function constInits(exprPath, src) {
+  if (initCache.has(exprPath.node)) return initCache.get(exprPath.node);
+  const texts = [];
+  const seen = new Set();
+  const follow = (p) => {
+    const ids = p.isIdentifier() ? [p] : [];
+    p.traverse({ Identifier: (id) => void ids.push(id) });
+    for (const id of ids) {
+      const binding = id.isReferencedIdentifier() && id.scope.getBinding(id.node.name);
+      if (!binding || binding.kind !== 'const' || seen.has(binding)) continue;
+      seen.add(binding);
+      const init = binding.path.isVariableDeclarator() && binding.path.get('init');
+      if (!init?.node) continue;
+      texts.push(src.slice(init.node.start, init.node.end));
+      follow(init);
+    }
+  };
+  follow(exprPath);
+  initCache.set(exprPath.node, texts);
+  return texts;
+}
+
 // 이 노드가 렌더되거나 실행되려면 참이어야 하는 조건들을 파일 안에서 거슬러 올라가며 모은다.
-function guardsOf(nodePath, src) {
+function guardsOf(nodePath, src, inits) {
   const guards = [];
+  const add = (text, exprPath) => {
+    guards.push(text);
+    const found = constInits(exprPath, src);
+    if (found.length) inits.set(text, [...new Set([...(inits.get(text) ?? []), ...found])]);
+  };
   let child = nodePath;
   let parent = nodePath.parentPath;
   while (parent) {
     const p = parent.node;
     if (p.type === 'LogicalExpression' && p.operator === '&&' && child.key === 'right') {
-      guards.push(sliceText(src, p.left));
-    } else if (p.type === 'ConditionalExpression' && child.key !== 'test') {
+      add(sliceText(src, p.left), parent.get('left'));
+    } else if ((p.type === 'ConditionalExpression' || p.type === 'IfStatement') && child.key !== 'test') {
       const t = sliceText(src, p.test);
-      guards.push(child.key === 'consequent' ? t : `!(${t})`);
-    } else if (p.type === 'IfStatement' && child.key !== 'test') {
-      const t = sliceText(src, p.test);
-      guards.push(child.key === 'consequent' ? t : `!(${t})`);
+      add(child.key === 'consequent' ? t : `!(${t})`, parent.get('test'));
     }
     child = parent;
     parent = parent.parentPath;
@@ -73,6 +99,11 @@ export async function extractClient(config) {
   const constantFiles = new Set(Object.values(config.constants).map((rel) => path.join(config.srcRoot, rel)));
   const settingsRoots = new Set(config.settingsRoots);
   const [routeRoot, ...routeRest] = config.routeConstant.split('.');
+  const guardInits = new Map();
+  const initsOf = (file) => {
+    if (!guardInits.has(file)) guardInits.set(file, new Map());
+    return guardInits.get(file);
+  };
 
   function lookupConstant(chain) {
     if (!chain || !constantNames.has(chain[0])) return undefined;
@@ -220,9 +251,10 @@ export async function extractClient(config) {
     const apiNamed = new Map();
     const apiNamespaces = new Set();
     const localFnRefs = new Map();
+    const inits = initsOf(path.relative(config.srcRoot, file));
 
     function record(kind, entry, nodePath) {
-      const guards = guardsOf(nodePath, src);
+      const guards = guardsOf(nodePath, src, inits);
       const owner = enclosingFunctionName(nodePath);
       const item = { ...entry, line: nodePath.node.loc.start.line, guards };
       facts[kind].push(item);
@@ -281,7 +313,7 @@ export async function extractClient(config) {
         const target = localFnRefs.get(p.node.name);
         if (!target || !p.isReferencedIdentifier()) return;
         if (p.findParent((a) => a === target.fnPath)) return;
-        const outer = guardsOf(p, src);
+        const outer = guardsOf(p, src, inits);
         for (const item of target.items) {
           item.inheritedGuards ??= [];
           item.inheritedGuards.push({ via: p.node.name, line: p.node.loc.start.line, guards: outer });
@@ -313,6 +345,7 @@ export async function extractClient(config) {
 
   function extractScreens(routesFile) {
     const { src, ast } = parseFile(routesFile);
+    const inits = initsOf(config.routesFile);
     const screens = [];
     traverse(ast, {
       JSXElement(p) {
@@ -322,7 +355,7 @@ export async function extractClient(config) {
         if (config.redirectElements.includes(opening.name.name)) {
           const toValue = attr('to')?.get('value');
           const to = toValue && evaluate(toValue.isJSXExpressionContainer() ? toValue.get('expression') : toValue);
-          redirects.push({ to: typeof to === 'string' ? to : UNKNOWN, line: p.node.loc.start.line, guards: guardsOf(p, src) });
+          redirects.push({ to: typeof to === 'string' ? to : UNKNOWN, line: p.node.loc.start.line, guards: guardsOf(p, src, inits) });
           return;
         }
         if (!config.routeElements.includes(opening.name.name)) return;
@@ -337,7 +370,7 @@ export async function extractClient(config) {
           path: typeof pathValue === 'string' ? pathValue : UNKNOWN,
           component: compName,
           componentFile: resolveComponent(p.scope, compName, routesFile),
-          routeGuards: guardsOf(p, src),
+          routeGuards: guardsOf(p, src, inits),
           line: p.node.loc.start.line,
         });
       },
@@ -383,5 +416,5 @@ export async function extractClient(config) {
     return { ...s, componentFile: rel(s.componentFile), closureSize: files.length, apiCalls, settingReads, links };
   });
 
-  return { screens, apiFunctions, redirects };
+  return { screens, apiFunctions, redirects, guardInits };
 }
