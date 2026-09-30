@@ -92,6 +92,9 @@
   .box.s-none { border-style: dashed; }
   .box.call { background: var(--bg); }
   .box .calls { flex: none; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font: inherit; font-size: 11px; line-height: 1.1; padding: 0 5px; cursor: pointer; }
+  .flowbar { position: sticky; top: -16px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -16px -16px 10px; padding: 12px 16px 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .flowbar button { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+  .flowbar .focusing { margin-left: 8px; font-size: 12px; }
   .box .toggle { flex: none; width: 20px; height: 16px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: normal; line-height: 1; cursor: pointer; }
 </style>
 </head>
@@ -113,7 +116,7 @@ const DEPTH_LABELS = { ui: 'UI/E2E', api: 'API', render: '렌더링만', code: '
 const TEST_STATUS = { pass: '통과', fail: '실패', pending: '보류' };
 const MARK_STATUS = { 'needs-more': '더 필요', missing: '없음', fine: '충분' };
 
-const state = { data: null, selected: null, target: null, noTestsOnly: false, query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set() };
+const state = { data: null, selected: null, target: null, noTestsOnly: false, query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null };
 const authorStore = {
   get() { try { return localStorage.getItem('duru.author') ?? ''; } catch { return ''; } },
   set(v) { try { localStorage.setItem('duru.author', v); } catch {} },
@@ -327,6 +330,52 @@ function svg(tag, attrs, ...children) {
   return el;
 }
 
+const screensIn = (roots) => roots.flatMap((n) => [n, ...screensIn(n.children)]);
+function expandAll(roots) {
+  for (const n of screensIn(roots)) {
+    state.collapsed.delete(n.id);
+    if (n.calls.length) state.openCalls.add(n.id);
+  }
+}
+function collapseAll(roots) {
+  for (const n of screensIn(roots)) {
+    if (n.children.length) state.collapsed.add(n.id);
+    state.openCalls.delete(n.id);
+  }
+}
+// 접힌 상자는 하위 상자까지 합친 결과로 색이 정해져 자기 빈틈이 가려지므로, 자기와 하위 어디에도 빈틈이 없는 가지만 접는다.
+const isGap = (c) => c.fail > 0 || c.pass + c.fail + c.pending === 0;
+function openGapsOnly(roots) {
+  const walk = (n) => {
+    const below = n.children.map(walk).some(Boolean);
+    const callGap = n.calls.some((c) => isGap(c.counts));
+    const any = below || callGap || isGap(n.counts);
+    if (any) state.collapsed.delete(n.id); else if (n.children.length) state.collapsed.add(n.id);
+    if (callGap) state.openCalls.add(n.id); else state.openCalls.delete(n.id);
+    return any;
+  };
+  roots.forEach(walk);
+}
+const flowTrees = () => (state.focus ? state.focus.roots : [...state.data.flow.roots, ...state.data.flow.unreached]);
+
+let focusRequest = null;
+async function focusOn(id) {
+  focusRequest = id;
+  state.flowError = null;
+  try {
+    const res = await fetch(`/api/flow?from=${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(await res.text());
+    const { roots } = await res.json();
+    if (focusRequest !== id) return;
+    state.focus = { id, roots };
+  } catch (err) {
+    if (focusRequest !== id) return;
+    state.flowError = `이 가지를 불러오지 못했습니다: ${err.message}`;
+  }
+  renderFlow();
+  if (!state.flowError) document.getElementById('flow').scrollTop = 0;
+}
+
 const addCounts = (a, b) => ({ pass: a.pass + b.pass, fail: a.fail + b.fail, pending: a.pending + b.pending });
 function subtreeCounts(root) {
   const calls = new Map();
@@ -352,7 +401,7 @@ function layoutTree(roots) {
   const edges = [];
   let row = 0;
   const place = (node, depth) => {
-    const collapsed = state.collapsed.has(node.id);
+    const collapsed = state.collapsed.has(node.id) && node.children.length > 0;
     const kids = collapsed ? [] : [...node.children, ...(state.openCalls.has(node.id) ? node.calls : [])];
     const ys = kids.map((k) => (k.kind === 'screen' ? place(k, depth + 1) : placeCall(k, depth + 1)));
     const y = ys.length ? (ys[0] + ys[ys.length - 1]) / 2 : row++ * ROW;
@@ -389,7 +438,16 @@ function screenBox(b) {
         e.stopPropagation();
         if (state.collapsed.has(n.id)) state.collapsed.delete(n.id); else state.collapsed.add(n.id);
         renderFlow();
-      } }, b.collapsed ? '+' : '−') : null),
+      } }, b.collapsed ? '+' : '−') : null,
+      hasKids || n.calls.length ? h('button', { class: 'toggle', title: '이 가지 전부 펼치기(화면과 API 호출)', onclick: (e) => {
+        e.stopPropagation();
+        expandAll([n]);
+        renderFlow();
+      } }, '»') : null,
+      hasKids && state.focus?.id !== n.id ? h('button', { class: 'toggle', title: '이 가지만 보기', onclick: (e) => {
+        e.stopPropagation();
+        focusOn(n.id);
+      } }, '◎') : null),
     h('div', { class: 'l2' }, countText(counts), b.collapsed ? h('span', {}, ' (하위 합)') : null, badges ? ` · ${badges}` : ''),
     l3text || showCalls
       ? h('div', { class: 'l3' },
@@ -423,12 +481,24 @@ function canvas(roots) {
 
 function renderFlow() {
   const { roots, unreached } = state.data.flow;
+  const act = (fn) => () => { fn(flowTrees()); renderFlow(); };
+  const focused = state.focus && screensIn(state.data.flow.roots.concat(unreached)).find((n) => n.id === state.focus.id);
   fill(document.getElementById('flow'),
+    h('div', { class: 'flowbar' },
+      h('button', { onclick: act(expandAll) }, '모두 펼치기'),
+      h('button', { onclick: act(collapseAll) }, '모두 접기'),
+      h('button', { title: '테스트가 없거나 실패한 상자까지 가는 길만 펼치고 나머지는 접습니다', onclick: act(openGapsOnly) }, '빈틈만 펼치기'),
+      state.focus
+        ? h('span', { class: 'focusing' }, h('strong', {}, focused?.label ?? state.focus.id), ' 가지만 보는 중 ',
+          h('button', { onclick: () => { state.focus = null; renderFlow(); document.getElementById('flow').scrollTop = 0; } }, '전체 보기'))
+        : null,
+      state.flowError ? h('span', { class: 'error' }, state.flowError) : null),
     h('div', { class: 'flowlegend' },
-      h('span', {}, '진입 화면에서 링크를 따라 화면 → API 호출로 뻗습니다. 화면마다 처음 닿은 자리에 한 번만 그리고, 다른 가지로 가는 링크는 상자 안에 → 로 적습니다. 상자의 「API」 단추로 그 화면의 호출을 펼칩니다.'),
+      h('span', {}, '진입 화면에서 링크를 따라 화면 → API 호출로 뻗습니다. 화면마다 처음 닿은 자리에 한 번만 그리고, 다른 가지로 가는 링크는 상자 안에 → 로 적습니다. 상자의 「API」 단추로 그 화면의 호출을, 「»」로 그 가지 전부를 펼치고, 「◎」로 그 가지만 따로 봅니다.'),
       h('span', {}, '점선: 설정·역할 조건이 걸린 링크(조건은 상자 셋째 줄) · 상자 테두리: 붙은 테스트(초록 전부 통과 · 빨강 실패 있음 · 노랑 보류 있음 · 점선 테스트 없음) · 상자를 누르면 목록에서 그 화면을 엽니다')),
-    roots.length ? canvas(roots) : h('p', { class: 'muted' }, '진입 화면을 찾지 못했습니다. 설정 파일의 entryPaths 에 적어 주세요.'),
-    unreached.length ? [h('h2', {}, `진입 화면에서 닿지 않는 화면 ${unreached.length}`), canvas(unreached)] : null);
+    state.focus ? canvas(state.focus.roots)
+      : roots.length ? canvas(roots) : h('p', { class: 'muted' }, '진입 화면을 찾지 못했습니다. 설정 파일의 entryPaths 에 적어 주세요.'),
+    !state.focus && unreached.length ? [h('h2', {}, `진입 화면에서 닿지 않는 화면 ${screensIn(unreached).length}`), canvas(unreached)] : null);
 }
 
 function setView(view) {
