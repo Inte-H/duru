@@ -36,11 +36,11 @@ test('rebuild writes map.json and tests.json to the configured output folder and
   }
 });
 
-for (const args of [['nope', 'x.json'], ['extract', 'x.json', 'out.json'], ['rebuild', 'x.json', '--port', '5000'], ['review', 'x.json', '--port', 'abc']]) {
+for (const args of [['nope', 'x.json'], ['extract', 'x.json', 'out.json'], ['rebuild', 'x.json', '--port', '5000'], ['tasks', 'x.json', '--port', '5000'], ['review', 'x.json', '--port', 'abc']]) {
   test(`"${args.join(' ')}" prints usage and exits with 2`, () => {
     assert.throws(
       () => execFileSync(process.execPath, [CLI, ...args], { encoding: 'utf8', stdio: 'pipe' }),
-      (err) => err.status === 2 && /usage: duru <extract\|rebuild>/.test(err.stderr),
+      (err) => err.status === 2 && /usage: duru <extract\|rebuild\|tasks>/.test(err.stderr),
     );
   });
 }
