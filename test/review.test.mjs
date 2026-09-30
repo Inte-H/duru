@@ -48,7 +48,7 @@ test('the page and its data are served, with the map, the tests per screen and t
       assert.match(await page.text(), /<title>duru 리뷰<\/title>/);
 
       const data = await (await fetch(`${base}/api/data`)).json();
-      assert.equal(data.map.screens.length, 9);
+      assert.equal(data.map.screens.length, 10);
       assert.ok(data.tests.nodes['/home#Home'].length > 0);
       assert.deepEqual(data.marks, { attached: [], detached: [] });
       assert.deepEqual(data.depths, ['ui', 'api', 'render', 'code', 'data']);
@@ -120,6 +120,7 @@ test('with an app address, only screens without path variables get a link to the
         '/help#Help': 'https://app.example.test/help',
         '/admin/member#AdminMember': 'https://app.example.test/admin/member',
         '/admin/group#AdminGroup': 'https://app.example.test/admin/group',
+        '/admin/audit#AdminAudit': 'https://app.example.test/admin/audit',
         '/lab#Lab': 'https://app.example.test/lab',
         '/lab/result#LabResult': 'https://app.example.test/lab/result',
       });
@@ -199,7 +200,7 @@ for (const host of ['127.0.0.1', 'localhost']) {
       withServer(config, 'reviewer', (base) =>
         withPage(base.replace('127.0.0.1', host), async (p) => {
           await p.waitForSelector('#screen-list li');
-          assert.equal(await p.locator('#screen-list li').count(), 9);
+          assert.equal(await p.locator('#screen-list li').count(), 10);
           assert.match(await p.textContent('#author'), /reviewer/);
 
           await p.fill('#left input[type=search]', 'lab');
@@ -258,11 +259,11 @@ test('in a browser, the flow graph opens calls and branches, folds them, and a b
         await p.click('#view-flow');
         await p.waitForSelector('#flow .box');
         assert.equal(await p.isHidden('main'), true);
-        assert.deepEqual(await boxCount(p), { screens: 9, calls: 0 });
+        assert.deepEqual(await boxCount(p), { screens: 10, calls: 0 });
 
         const home = await screenBox(p, '/home#Home');
         await home.locator('.calls').click();
-        assert.deepEqual(await boxCount(p), { screens: 9, calls: 2 });
+        assert.deepEqual(await boxCount(p), { screens: 10, calls: 2 });
         assert.match(await home.locator('.calls').textContent(), /▾/);
         await home.locator('.calls').click();
 
@@ -274,7 +275,7 @@ test('in a browser, the flow graph opens calls and branches, folds them, and a b
         await folded.locator('button.toggle', { hasText: '+' }).click();
 
         await flowButton(p, '모두 펼치기').click();
-        assert.deepEqual(await boxCount(p), { screens: 9, calls: 8 });
+        assert.deepEqual(await boxCount(p), { screens: 10, calls: 8 });
         const overlaps = await p.$$eval('#flow .box', (boxes) => boxes.flatMap((box) => {
           const outer = box.getBoundingClientRect();
           return [...box.querySelectorAll('.l1, .l3')].flatMap((line) => [...line.querySelectorAll('button')].filter((b) => {
@@ -288,7 +289,7 @@ test('in a browser, the flow graph opens calls and branches, folds them, and a b
         await flowButton(p, '모두 접기').click();
         assert.deepEqual(await boxCount(p), { screens: 1, calls: 0 });
         await (await screenBox(p, '/signin#SignIn')).locator('button[title^="이 가지 전부"]').click();
-        assert.deepEqual(await boxCount(p), { screens: 9, calls: 8 });
+        assert.deepEqual(await boxCount(p), { screens: 10, calls: 8 });
 
         await (await screenBox(p, '/lab/result#LabResult')).click();
         await p.waitForSelector('main:not([hidden])');
@@ -329,9 +330,9 @@ test('in a browser, one branch is shown on its own, and a late answer for an ear
         await (await screenBox(p, '/home#Home')).locator('button[title="이 가지만 보기"]').click();
         await p.waitForSelector('.flowbar .focusing');
         assert.match(await p.textContent('.flowbar .focusing'), /^\/home /);
-        assert.equal((await boxCount(p)).screens, 8);
-        await flowButton(p, '전체 보기').click();
         assert.equal((await boxCount(p)).screens, 9);
+        await flowButton(p, '전체 보기').click();
+        assert.equal((await boxCount(p)).screens, 10);
 
         await p.route('**/api/flow?from=*', async (route) => {
           if (route.request().url().includes(encodeURIComponent('/signin#SignIn'))) await new Promise((r) => setTimeout(r, 500));
