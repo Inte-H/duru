@@ -44,10 +44,14 @@ export async function loadConstants(config) {
   globalThis.document ??= { getElementById: () => null };
 
   const loaded = {};
-  for (const [name, rel] of Object.entries(config.constants)) {
-    const rewritten = copyModule(path.join(config.srcRoot, rel));
-    const mod = await import(pathToFileURL(path.join(outDir, rewritten)).href);
-    loaded[name] = mod.default;
+  try {
+    for (const [name, rel] of Object.entries(config.constants)) {
+      const rewritten = copyModule(path.join(config.srcRoot, rel));
+      const mod = await import(pathToFileURL(path.join(outDir, rewritten)).href);
+      loaded[name] = mod.default;
+    }
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
   }
   return loaded;
 }

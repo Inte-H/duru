@@ -1,0 +1,5 @@
+core	GET	/api/v1/document/list
+core	GET	/api/v1/document/{documentId}
+core	POST	/api/v1/document/{documentId}/name
+core	GET	/api/v1/member/list
+core	POST	/api/v1/auth/sign-in
