@@ -316,7 +316,7 @@ test('in a browser, the flow graph opens calls and branches, folds them, and a b
         await folded.locator('button.toggle', { hasText: '+' }).click();
 
         await flowButton(p, '모두 펼치기').click();
-        assert.deepEqual(await boxCount(p), { screens: 11, calls: 8 });
+        assert.deepEqual(await boxCount(p), { screens: 11, calls: 12 });
         const overlaps = await p.$$eval('#flow .box', (boxes) => boxes.flatMap((box) => {
           const outer = box.getBoundingClientRect();
           return [...box.querySelectorAll('.l1, .l3')].flatMap((line) => [...line.querySelectorAll('button')].filter((b) => {
@@ -330,7 +330,7 @@ test('in a browser, the flow graph opens calls and branches, folds them, and a b
         await flowButton(p, '모두 접기').click();
         assert.deepEqual(await boxCount(p), { screens: 1, calls: 0 });
         await (await screenBox(p, '/signin#SignIn')).locator('button[title^="이 가지 전부"]').click();
-        assert.deepEqual(await boxCount(p), { screens: 11, calls: 8 });
+        assert.deepEqual(await boxCount(p), { screens: 11, calls: 12 });
 
         await (await screenBox(p, '/lab/result#LabResult')).click();
         await p.waitForSelector('main:not([hidden])');

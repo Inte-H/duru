@@ -1,3 +1,10 @@
+import ExportDialog from './ExportDialog';
+
 export default function AdminAudit() {
-  return <section>Audit log</section>;
+  return (
+    <section>
+      Audit log
+      <ExportDialog />
+    </section>
+  );
 }

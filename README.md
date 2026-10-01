@@ -45,6 +45,9 @@ relative to the config file, except the files inside the client source (`routesF
 - `constants`, `constantStubs` — modules evaluated for route paths and API endpoint definitions, and
   stand-in source for outside packages they import
 - `apiModules`, `passThroughCalls` — where API functions live and which wrappers pass a URL through
+- `bodyArgKeys` — properties of a call argument that hold the request body (optional, default none), such
+  as `data` in `ajaxExport({ data: { withHistory } })`. Without it only an object written straight into the
+  call is read as the body
 - `settingsRoots` — identifiers through which settings are read
 - `settingsDefaults` — where the default values of a settings root are written (optional), as
   `{ "globalSettings": { "file": "store/settings.js", "const": "defaults" } }`: the object literal that a
@@ -99,6 +102,17 @@ Each call node lists its `method`, `path`, `server` match, the API functions tha
 that reach it. Every endpoint under `apiFunctions` carries the `callId` of its node (`null` when unresolved),
 and a screen is marked `dead: true` when it reaches a call whose server match is `none`. An unresolved call
 alone does not make a screen dead.
+
+Each call node also lists the on/off `options` of its request body, read where a screen calls the API
+function. The body is an object written into the call's arguments, or the object under a `bodyArgKeys`
+property of one; either may be a const of the same file. A body key is an option when its value is `true` or
+`false`, a const initialised to one of them, or the first value of `useState(true)` or `useState(false)`.
+Each option has its `key`, the `values` to test it with (always `[true, false]`, whatever the screen sends),
+`sources` (`source` for one found in the code) and the `sites` it was found at (`screen`, `file`, `line` of
+the key), sorted by key. The same keys and lines are also under each screen's API call as `options`. A key
+followed in the same body by a key or method of the same name, a computed key or a spread
+(`{ withHistory: false, ...prefs }`) is not an option, because the later one may be what is sent; a spread itself
+is not followed. A `bodyArgKeys` property followed in the same way gives no options at all.
 
 Each screen's `access` says whether it opens only under a setting or a role. A guard that reads a member of
 a `settingsRoots` identifier is a `setting` condition, one that reads a `roleIdentifiers` entry is a `role`
@@ -181,7 +195,7 @@ same browser cannot end it.
 one depth is `needs-more` or `missing`. Marks whose current state is `fine` and detached marks are left out.
 Each screen comes with its open marks and notes, the component file and route line, the app address when
 `appUrl` is set, the settings and roles it needs and where they are checked, the API calls it makes with
-their tests, and the tests already attached with their depth and status. The list starts with how to tag
+their tests and the on/off options this screen sends, and the tests already attached with their depth and status. The list starts with how to tag
 new tests so that they attach after a `rebuild`. Adding tests does not take a screen off the list; a
 reviewer marking it `fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
 

@@ -173,3 +173,25 @@ test('a result source configured with the output depth shows its tests and an ou
     assert.match(home, /^ {2}- GET:\/api\/v1\/document\/list — tests: output fail 1$/m);
   });
 });
+
+test('a call line in the task list names the on/off options of its request body', () => {
+  withFixtureCopy(({ configFile, cli }) => {
+    cli('rebuild');
+    addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/report#AdminReport' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    const report = cli('tasks').split('## /admin/report#AdminReport\n')[1].split('\n## ')[0];
+    assert.match(report, /^- calls:\n {2}- POST:\/api\/v1\/report\/export — no tests — options: withAttachments, withHistory\n {2}- POST:\/api\/v1\/report\/archive — no tests — options: signedOnly, withHistory$/m);
+  });
+});
+
+test('a call line names only the options its own screen sends', () => {
+  withFixtureCopy(({ copy, configFile, cli }) => {
+    fs.writeFileSync(
+      path.join(copy, 'client/src/components/AdminAudit.js'),
+      "import { ajaxReportExport } from '_ajax/AjaxFunc';\n\nexport default function AdminAudit() {\n  return <button onClick={() => ajaxReportExport({ ids: [] })}>Export</button>;\n}\n",
+    );
+    cli('rebuild');
+    addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/audit#AdminAudit' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    const audit = cli('tasks').split('## /admin/audit#AdminAudit\n')[1].split('\n## ')[0];
+    assert.match(audit, /^- calls:\n {2}- POST:\/api\/v1\/report\/export — no tests$/m);
+  });
+});
