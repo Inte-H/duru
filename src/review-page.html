@@ -55,6 +55,14 @@
   tbody tr.selected { background: var(--selected); }
   td.depth { width: 110px; font-weight: 600; }
   td.mark { width: 90px; }
+  table.calls tbody tr { cursor: default; }
+  table.calls td.cell { cursor: pointer; white-space: nowrap; font-size: 12px; }
+  table.calls td.cell:hover { background: var(--selected); }
+  table.calls td.cell.selected { background: var(--selected); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  table.calls td.cell .chip { margin-top: 2px; }
+  table.calls td.call { overflow-wrap: anywhere; }
+  .ok { color: var(--pass); } .ng { color: var(--fail); } .wait { color: var(--pending); }
+  .chip.dead, .chip.v-none { color: var(--fail); } .chip.v-method-mismatch { color: var(--more); } .chip.v-match { color: var(--pass); } .chip.v-unresolved { color: var(--muted); }
   .test { margin-bottom: 6px; }
   .test .detail { color: var(--muted); font-size: 12px; margin-left: 4px; }
   .guard { display: block; }
@@ -88,7 +96,6 @@
   .box .l2, .box .l3 { color: var(--muted); }
   .box.screen .l1, .box .l3 { display: flex; align-items: center; gap: 4px; }
   .box .text { flex: 1; min-width: 0; }
-  .box .ok { color: var(--pass); } .box .ng { color: var(--fail); } .box .wait { color: var(--pending); }
   .box.s-pass { border-color: var(--pass); }
   .box.s-fail { border-color: var(--fail); }
   .box.s-pending { border-color: var(--pending); }
@@ -120,8 +127,13 @@
 const DEPTH_LABELS = { ui: 'UI/E2E', api: 'API', render: '렌더링만', code: '코드', data: '데이터', output: '산출물' };
 const TEST_STATUS = { pass: '통과', fail: '실패', pending: '보류' };
 const MARK_STATUS = { 'needs-more': '더 필요', missing: '없음', fine: '충분' };
+const SERVER_STATUS = { match: '서버에 있음', 'method-mismatch': '메서드 불일치', none: '서버에 없음', unresolved: '판정 불가' };
+const SCREEN_FILTERS = [
+  { key: 'no-tests', label: '테스트 없음만', keep: (s) => testsOf(s.id).length === 0 },
+  { key: 'dead', label: '죽은 화면', keep: (s) => s.dead },
+];
 
-const state = { data: null, selected: null, target: null, noTestsOnly: false, query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null, ended: false };
+const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null, ended: false };
 const authorStore = {
   get() { try { return localStorage.getItem('duru.author') ?? ''; } catch { return ''; } },
   set(v) { try { localStorage.setItem('duru.author', v); } catch {} },
@@ -148,13 +160,21 @@ const testsOf = (id) => state.data.tests.nodes[id] ?? [];
 const markOf = (t) => state.data.marks.attached.find((m) => m.key === keyOf(t));
 const fmtDate = (iso) => new Date(iso).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
 const markChip = (m) => (m ? h('span', { class: `chip ${m.current.status}`, title: m.current.note || '' }, MARK_STATUS[m.current.status]) : null);
+const callOf = (id) => state.data.map.calls.find((c) => c.id === id);
+const callIdsOf = (s) => [...new Set(s.apiCalls.flatMap((c) => (c.endpoints ?? []).map((e) => e.callId)).filter(Boolean))];
 
 async function load() {
   const res = await fetch('/api/data');
   if (!res.ok) throw new Error(await res.text());
   state.data = await res.json();
-  if (!state.selected || !state.data.map.screens.some((s) => s.id === state.selected)) state.selected = state.data.map.screens[0]?.id ?? null;
-  if (!state.target || state.target.node !== state.selected) state.target = state.selected ? { node: state.selected } : null;
+  const { screens } = state.data.map;
+  const screen = screens.find((s) => s.id === state.selected) ?? screens[0];
+  state.selected = screen?.id ?? null;
+  const targetKept = state.target && screen && (state.target.node === screen.id || callIdsOf(screen).includes(state.target.node));
+  if (!targetKept) {
+    state.target = screen ? { node: screen.id } : null;
+    state.draft = null;
+  }
 }
 
 function select(id) {
@@ -187,15 +207,21 @@ function renderHeader() {
   }
 }
 
-function renderLeft() {
-  const { map, marks } = state.data;
+function visibleScreens() {
   const q = state.query.trim().toLowerCase();
-  const visible = map.screens.filter((s) => (!state.noTestsOnly || testsOf(s.id).length === 0) && (!q || s.id.toLowerCase().includes(q)));
+  return state.data.map.screens.filter((s) => SCREEN_FILTERS.every((f) => !state.filters.has(f.key) || f.keep(s)) && (!q || s.id.toLowerCase().includes(q)));
+}
+
+function renderLeft() {
+  const { marks } = state.data;
   const left = document.getElementById('left');
   fill(left,
     h('div', { class: 'filters' },
       h('input', { type: 'search', placeholder: '화면 찾기', value: state.query, oninput: (e) => { state.query = e.target.value; renderLeftList(); } }),
-      h('label', {}, h('input', { type: 'checkbox', checked: state.noTestsOnly, onchange: (e) => { state.noTestsOnly = e.target.checked; renderLeft(); } }), '테스트 없음만'),
+      SCREEN_FILTERS.map((f) => h('label', {}, h('input', { type: 'checkbox', name: f.key, checked: state.filters.has(f.key), onchange: (e) => {
+        if (e.target.checked) state.filters.add(f.key); else state.filters.delete(f.key);
+        renderLeftList();
+      } }), f.label)),
     ),
     h('ul', { class: 'screens', id: 'screen-list' }),
     h('h2', {}, `떨어져 나감 ${marks.detached.length}`),
@@ -205,17 +231,17 @@ function renderLeft() {
           h('span', { class: 'muted' }, `${m.current.author} · ${fmtDate(m.current.date)}`), m.current.note ? h('div', {}, m.current.note) : null)))
       : h('p', { class: 'muted' }, '맵에서 사라진 노드에 달린 표시가 여기 남습니다.'),
   );
-  renderLeftList(visible);
+  renderLeftList();
 }
 
-function renderLeftList(visible) {
-  const q = state.query.trim().toLowerCase();
-  visible ??= state.data.map.screens.filter((s) => (!state.noTestsOnly || testsOf(s.id).length === 0) && (!q || s.id.toLowerCase().includes(q)));
+function renderLeftList() {
+  const visible = visibleScreens();
   const list = document.getElementById('screen-list');
   fill(list, ...visible.map((s) => {
     const n = testsOf(s.id).length;
     return h('li', { class: s.id === state.selected ? 'selected' : '', onclick: () => select(s.id) },
       h('span', { class: 'name' }, h('span', {}, s.path), ' ', h('span', { class: 'muted' }, s.component)),
+      s.dead ? h('span', { class: 'chip dead', title: '서버에 없는 호출이 있습니다' }, '죽은 화면') : null,
       markChip(markOf({ node: s.id })),
       h('span', { class: `count${n ? '' : ' none'}` }, n ? `테스트 ${n}` : '테스트 없음'));
   }));
@@ -254,7 +280,70 @@ function renderCenter() {
         h('td', { class: 'depth' }, r.label),
         h('td', {}, r.target.depth ? (r.tests.length ? r.tests.map(testItem) : h('span', { class: 'muted' }, '없음')) : h('span', { class: 'muted' }, `테스트 ${tests.length}개`)),
         h('td', { class: 'mark' }, markChip(markOf(r.target)) ?? h('span', { class: 'muted' }, '—')))))),
+    callTable(s),
   );
+}
+
+const serverText = (server) => (server.status === 'match' && server.labels?.length
+  ? `${SERVER_STATUS.match} (${server.labels.join(', ')})`
+  : SERVER_STATUS[server.status] ?? server.status);
+
+function verdictChip(server) {
+  return h('span', { class: `chip v-${server.status}`, title: server.candidates ? `서버에는 ${server.candidates.join(' / ')}` : null }, serverText(server));
+}
+
+function callRows(s) {
+  const rows = [];
+  const seen = new Set();
+  for (const c of s.apiCalls) {
+    const site = `${c.fn} · ${c.file}:${c.line}`;
+    if (!c.endpoints) {
+      rows.push({ site, problem: 'API 함수를 찾지 못함' });
+      continue;
+    }
+    for (const e of c.endpoints) {
+      if (!e.callId) rows.push({ site, problem: `${e.method ?? '?'} ${e.url ?? '주소를 계산하지 못함'}`, server: e.server });
+      else if (!seen.has(e.callId)) {
+        seen.add(e.callId);
+        rows.push({ call: callOf(e.callId) });
+      }
+    }
+  }
+  return rows;
+}
+
+function cell(target, tests) {
+  const counts = { pass: 0, fail: 0, pending: 0 };
+  for (const t of tests) counts[t.status] += 1;
+  return h('td', {
+    class: `cell${keyOf(target) === keyOf(state.target) ? ' selected' : ''}`,
+    onclick: () => selectTarget(target),
+  },
+    h('div', {}, tests.length ? countText(counts) : h('span', { class: 'muted' }, '—')),
+    markChip(markOf(target)));
+}
+
+function callTable(s) {
+  const rows = callRows(s);
+  if (!rows.length) return [h('h2', {}, 'API 호출'), h('p', { class: 'muted' }, '부르는 API 호출이 없습니다.')];
+  const depths = state.data.depths;
+  return [
+    h('h2', {}, `API 호출 ${rows.length}`),
+    h('table', { class: 'calls' },
+      h('thead', {}, h('tr', {}, h('th', {}, '호출'), h('th', {}, '전체'), depths.map((d) => h('th', {}, DEPTH_LABELS[d])))),
+      h('tbody', {}, rows.map((r) => {
+        if (!r.call) {
+          return h('tr', {},
+            h('td', { class: 'call' }, h('div', { class: 'mono' }, r.problem), r.server ? verdictChip(r.server) : null, h('div', { class: 'muted mono' }, r.site)),
+            h('td', { class: 'muted', colspan: depths.length + 1 }, '호출 노드가 없어 테스트를 붙이거나 표시할 수 없습니다'));
+        }
+        const tests = testsOf(r.call.id);
+        return h('tr', {},
+          h('td', { class: 'call' }, h('div', { class: 'mono' }, r.call.id), verdictChip(r.call.server)),
+          cell({ node: r.call.id }, tests),
+          depths.map((d) => cell({ node: r.call.id, depth: d }, tests.filter((t) => t.depth === d))));
+      }))),
+  ];
 }
 
 function guardList(item) {
@@ -268,11 +357,13 @@ function renderRight() {
   const s = state.data.map.screens.find((x) => x.id === state.selected);
   if (!s) return fill(right);
   const mark = markOf(state.target);
+  const call = state.target.node === s.id ? null : callOf(state.target.node);
   state.draft ??= { status: mark?.current.status ?? null, note: '' };
-  const targetLabel = state.target.depth ? `${DEPTH_LABELS[state.target.depth]} 깊이` : '화면 전체';
+  const targetLabel = state.target.depth ? `${DEPTH_LABELS[state.target.depth]} 깊이` : call ? '호출 전체' : '화면 전체';
   const needsName = !state.data.author;
   fill(right,
     h('h2', {}, '표시 — ', targetLabel),
+    call ? h('div', { class: 'mono' }, call.id) : null,
     h('div', { class: 'statuses' }, Object.entries(MARK_STATUS).map(([k, label]) =>
       h('button', { class: state.draft.status === k ? 'on' : '', onclick: () => { state.draft.status = k; renderRight(); } }, label))),
     h('textarea', { placeholder: '메모', oninput: (e) => { state.draft.note = e.target.value; } }, state.draft.note),
@@ -281,6 +372,29 @@ function renderRight() {
     mark ? h('ul', { class: 'plain history' }, mark.history.map((m) => h('li', {},
       h('span', { class: `chip ${m.status}` }, MARK_STATUS[m.status]), ' ', h('span', { class: 'muted' }, `${m.author} · ${fmtDate(m.date)}`),
       m.note ? h('div', {}, m.note) : null))) : null,
+    call ? callDetails(call, s) : screenDetails(s),
+  );
+  if (needsName && !authorStore.get()) right.prepend(h('p', { class: 'error' }, '작성자 이름을 위쪽에 적어 주세요. git user.name 이 설정되지 않았습니다.'));
+}
+
+function callDetails(call, s) {
+  const tests = testsOf(call.id).filter((t) => !state.target.depth || t.depth === state.target.depth);
+  const sites = s.apiCalls.filter((c) => (c.endpoints ?? []).some((e) => e.callId === call.id));
+  return [
+    h('h2', {}, '서버 대조'),
+    h('div', {}, verdictChip(call.server), ' ', call.server.path ? h('code', {}, call.server.path) : null),
+    call.server.candidates ? h('ul', { class: 'plain' }, call.server.candidates.map((c) => h('li', {}, '서버에는 ', h('code', {}, c)))) : null,
+    h('h2', {}, `테스트 ${tests.length}`),
+    tests.length ? h('div', {}, tests.map(testItem)) : h('p', { class: 'muted' }, '없음'),
+    h('h2', {}, '이 화면에서 부르는 곳'),
+    h('ul', { class: 'plain' }, sites.map((c) => h('li', {}, h('code', {}, c.fn), ' ', h('span', { class: 'muted mono' }, `${c.file}:${c.line}`)))),
+    h('h2', {}, `이 호출을 쓰는 화면 ${call.screens.length}`),
+    h('ul', { class: 'plain' }, call.screens.map((id) => h('li', {}, h('code', {}, id)))),
+  ];
+}
+
+function screenDetails(s) {
+  return [
     h('h2', {}, '소스 위치'),
     h('ul', { class: 'plain' },
       h('li', {}, '라우트 ', h('code', {}, `${state.data.routesFile}:${s.line}`)),
@@ -293,8 +407,7 @@ function renderRight() {
     h('h2', {}, `읽는 설정값 ${s.settingReads.length}`),
     s.settingReads.length ? h('ul', { class: 'plain' }, s.settingReads.map((r) => h('li', {},
       h('code', {}, r.key), ' ', h('span', { class: 'muted mono' }, `${r.file}:${r.line}`)))) : h('p', { class: 'muted' }, '없음'),
-  );
-  if (needsName && !authorStore.get()) right.prepend(h('p', { class: 'error' }, '작성자 이름을 위쪽에 적어 주세요. git user.name 이 설정되지 않았습니다.'));
+  ];
 }
 
 async function saveMark() {
@@ -324,8 +437,6 @@ async function saveMark() {
   render();
 }
 
-
-const SERVER_STATUS = { match: '서버에 있음', 'method-mismatch': '메서드 불일치', none: '서버에 없음' };
 const COL = 310, BOX_W = 260, ROW = 72, SCREEN_H = 60, CALL_H = 44;
 
 function svg(tag, attrs, ...children) {
@@ -467,10 +578,9 @@ function screenBox(b) {
 
 function callBox(b) {
   const c = b.node;
-  const server = c.server.status === 'match' ? `서버에 있음 ${(c.server.labels ?? []).join(', ')}` : SERVER_STATUS[c.server.status] ?? c.server.status;
   return h('div', { class: `box call ${statusOf(c.counts)}`, style: `left:${b.x}px;top:${b.y}px;width:${BOX_W}px;height:${CALL_H}px`, title: c.id },
     h('div', { class: 'l1 mono' }, c.label),
-    h('div', { class: 'l2' }, countText(c.counts), ` · ${server}`));
+    h('div', { class: 'l2' }, countText(c.counts), ` · ${serverText(c.server)}`));
 }
 
 function canvas(roots) {

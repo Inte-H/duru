@@ -179,21 +179,25 @@ tags go at the end of the line.
 ## Review page
 
 `review` serves a local page that reads `map.json` and `tests.json` from `outDir` (run `rebuild` first) and
-writes only into the marks folder. The left column lists the screens with a "no tests" filter, the middle shows the
-chosen screen's tests grouped by depth, and the right holds the mark form, the screen's source location,
-route guards, links and settings reads.
+writes only into the marks folder. The left column lists the screens with a "no tests" filter and a "dead
+screens" filter, which keeps the screens that call an API missing on the server. The middle shows the chosen
+screen's tests grouped by depth and, below them, its API calls: one row per call with its server match (on
+the server with its labels, method mismatch, not on the server, or unresolved) and one cell per depth counting
+the call's tests. A call whose address could not be worked out from the source has no node, so it shows
+without cells. The right holds the mark form and, for a screen, its source location, route guards, links and
+settings reads, or, for a call, its server match, its tests, where the screen calls it and the screens using it.
 
-A mark targets a screen or one depth row of a screen and records a status (`needs-more`, `missing`,
+A mark targets a screen or an API call, or one depth of either, and records a status (`needs-more`, `missing`,
 `fine`), a note, the author and the date. The author is `git config user.name` on the machine serving the
 page; when it is not set, the page asks for a name. Marks are never overwritten: marking a target again
 adds to its history, and the latest mark is its current state.
 
-Each mark is its own file, `<marksDir>/<screen>/<date>-<author>-<short ID>.json`, and saving a mark only
+Each mark is its own file, `<marksDir>/<node>/<date>-<author>-<short ID>.json`, and saving a mark only
 creates a new file. Marks added on two machines therefore never touch the same file and merge in git without
-a conflict, and the file list of a pull request reads as which screens were marked, by whom and when. The
-screen folder is the screen ID with characters that file names cannot hold replaced by `_`; which screen a
+a conflict, and the file list of a pull request reads as which screens and calls were marked, by whom and when.
+The folder is the screen or call ID with characters that file names cannot hold replaced by `_`; which node a
 mark belongs to is read from the `target` inside the file, not from the folder. `rebuild` never touches the
-marks folder. A mark whose screen is gone from a rebuilt map stays where it is and shows up under
+marks folder. A mark whose screen or call is gone from a rebuilt map stays where it is and shows up under
 "detached" until someone deals with it.
 
 `review` prints the page address and the marks folder on standard error and keeps running until the review
@@ -213,9 +217,11 @@ Each screen comes with its open marks and notes, the component file and route li
 `appUrl` is set, the settings and roles it needs and where they are checked, the API calls it makes with
 their tests and the on/off options this screen sends, and the tests already attached with their depth and status.
 Under a call with options, one line per option value (`withHistory=true`, `withHistory=false`) and one for
-tests with no option tag (`no option tag`) count the tests by depth and status. The list starts with how to tag
-new tests so that they attach after a `rebuild`. Adding tests does not take a screen off the list; a
-reviewer marking it `fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
+tests with no option tag (`no option tag`) count the tests by depth and status. API calls with an open mark
+follow under `# API calls`, each once however many screens call it, with its marks, the screens calling it,
+its server match and the tests already attached. The list starts with how to tag new tests so that they
+attach after a `rebuild`. Adding tests does not take a screen or call off the list; a reviewer marking it
+`fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
 
 ## Agent skill
 

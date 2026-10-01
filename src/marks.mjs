@@ -52,7 +52,7 @@ export function addMark(dir, { target, status, note, author }, now = new Date())
 const targetKey = (t) => (t.depth === undefined ? t.node : `${t.node} ${t.depth}`);
 
 export function classifyMarks(marks, map) {
-  const nodes = new Set(map.screens.map((s) => s.id));
+  const nodes = new Set([...map.screens.map((s) => s.id), ...(map.calls ?? []).map((c) => c.id)]);
   const byTarget = new Map();
   const ordered = [...marks].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   for (const m of ordered) {
