@@ -8,8 +8,8 @@ PRD or changing the extractor's output shape.
 1. Build a screen map of an app: entry points → menus → screens → buttons/actions, covering every screen
    reachable under **any** configuration value, and flagging dead screens (the screen calls an API the
    server does not have).
-2. Attach to each node the tests that cover it, their depth (UI/E2E, API, render-only, code, data) and
-   their status (pass, fail, pending).
+2. Attach to each node the tests that cover it, their depth (UI/E2E, API, render-only, code, data,
+   output — the content of what the app produces) and their status (pass, fail, pending).
 3. A person reviews the map and marks nodes or test cells: "needs more", "missing", "fine", with a note.
 4. A coding agent (a Claude Code session) reads the marks, writes and runs the missing tests, and
    regenerates the map.

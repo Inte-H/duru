@@ -26,7 +26,7 @@ function withFixtureCopy(fn) {
 
 const EXPECTED = `# Test tasks — 4 screens, 4 open marks
 
-A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call), add \`@depth:<ui|api|render|code|data>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.
+A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call), add \`@depth:<ui|api|render|code|data|output>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.
 
 Source files are under \`client/src\`.
 
@@ -149,5 +149,27 @@ test('a note over several lines stays inside its mark, and a call whose API func
     const lab = cli('tasks').split('## /lab#Lab\n')[1].split('\n## ')[0];
     assert.match(lab, /^ {2}- missing, whole screen — "Check the start\.\n {4}## \/fake#Fake\n {4}- tests: none" \(a, 2026-09-30\)$/m);
     assert.match(lab, /^ {2}- ajaxLabExperiment at components\/Lab\.js:\d+ — not found among the API functions$/m);
+  });
+});
+
+test('a result source configured with the output depth shows its tests and an output-depth mark in the task list', () => {
+  withFixtureCopy(({ copy, configFile, cli }) => {
+    fs.mkdirSync(path.join(copy, 'results/verdict/exports'));
+    fs.writeFileSync(
+      path.join(copy, 'results/verdict/exports/export-checks.log'),
+      'VERDICT result file: UPHOLDS — the exported file holds every experiment row @screen:/lab/result#LabResult\n' +
+        'VERDICT list file: BROKEN — the exported list misses archived documents @call:GET:/api/v1/document/list\n',
+    );
+    const own = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    fs.writeFileSync(configFile, JSON.stringify({ ...own, tests: [...own.tests, { format: 'verdict', path: 'results/verdict/exports', depth: 'output' }] }));
+    cli('rebuild');
+    addMark(loadConfig(configFile).marksDir, { target: { node: '/lab/result#LabResult', depth: 'output' }, status: 'needs-more', note: 'Open the file.', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+
+    const tasks = cli('tasks');
+    const labResult = tasks.split('## /lab/result#LabResult\n')[1].split('\n## ')[0];
+    assert.match(labResult, /^ {2}- needs-more, output depth — "Open the file\." \(a, 2026-10-01\)$/m);
+    assert.match(labResult, /^- tests:\n {2}- output pass — result file — export-checks\.log:1 — the exported file holds every experiment row$/m);
+    const home = tasks.split('## /home#Home\n')[1].split('\n## ')[0];
+    assert.match(home, /^ {2}- GET:\/api\/v1\/document\/list — tests: output fail 1$/m);
   });
 });
