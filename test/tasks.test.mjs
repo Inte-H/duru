@@ -24,9 +24,9 @@ function withFixtureCopy(fn) {
   }
 }
 
-const EXPECTED = `# Test tasks — 4 screens, 4 open marks
+const EXPECTED = `# Test tasks — 4 screens, 1 call, 5 open marks
 
-A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<ui|api|render|code|data|output>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.
+A reviewer marked these screens and API calls as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<ui|api|render|code|data|output>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen or call stays here until a reviewer marks it \`fine\`.
 
 Source files are under \`client/src\`.
 
@@ -85,6 +85,16 @@ Source files are under \`client/src\`.
   - link from /lab#Lab at components/Lab.js:14, no guard, but /lab#Lab needs one itself
 - calls: none
 - tests: none
+
+# API calls
+
+## POST:/api/v1/archive/document
+
+- marks:
+  - missing, api depth — "The server has no archive endpoint; check what the archive button gets back." (Kim Min, 2026-09-30)
+- called from: /document/:tab_draft_done_#DocumentList, /home#Home
+- server: not on the server
+- tests: none
 `;
 
 test('the task list holds the needs-more and missing marks of the fake client, leaving out fine and detached ones', () => {
@@ -132,7 +142,7 @@ test('with no open marks the task list says so', () => {
   withFixtureCopy(({ copy, cli }) => {
     fs.rmSync(path.join(copy, 'example-marks'), { recursive: true });
     cli('rebuild');
-    assert.match(cli('tasks'), /^# Test tasks — 0 screens, 0 open marks\n[\s\S]*\nNo open marks\.\n$/);
+    assert.match(cli('tasks'), /^# Test tasks — 0 screens, 0 calls, 0 open marks\n[\s\S]*\nNo open marks\.\n$/);
   });
 });
 
@@ -234,6 +244,54 @@ test('a test whose option tags name only options this screen does not send count
         '    - withAttachments=false — no tests',
         '    - no option tag — tests: ui pass 2',
         '- tests: none',
+        '',
+      ].join('\n'),
+    );
+  });
+});
+
+test('an API call with an open mark is listed once under API calls with its screens, server match and tests, and a call marked fine is left out', () => {
+  withFixtureCopy(({ configFile, cli }) => {
+    cli('rebuild');
+    const { marksDir } = loadConfig(configFile);
+    addMark(marksDir, { target: { node: 'PUT:/api/v1/document/{documentId}/name' }, status: 'needs-more', note: 'Rename uses the wrong method.', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    addMark(marksDir, { target: { node: 'POST:/api/v1/report/archive', depth: 'ui' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    addMark(marksDir, { target: { node: 'GET:/api/v1/member/list' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    addMark(marksDir, { target: { node: 'GET:/api/v1/member/list' }, status: 'fine', author: 'a' }, new Date('2026-10-01T06:00:00Z'));
+
+    const tasks = cli('tasks');
+    assert.match(tasks, /^# Test tasks — 4 screens, 3 calls, 7 open marks$/m);
+    assert.equal(
+      tasks.slice(tasks.indexOf('\n# API calls\n')),
+      [
+        '',
+        '# API calls',
+        '',
+        '## POST:/api/v1/archive/document',
+        '',
+        '- marks:',
+        '  - missing, api depth — "The server has no archive endpoint; check what the archive button gets back." (Kim Min, 2026-09-30)',
+        '- called from: /document/:tab_draft_done_#DocumentList, /home#Home',
+        '- server: not on the server',
+        '- tests: none',
+        '',
+        '## POST:/api/v1/report/archive',
+        '',
+        '- marks:',
+        '  - missing, ui depth (a, 2026-10-01)',
+        '- called from: /admin/audit#AdminAudit, /admin/report#AdminReport',
+        '- server: on the server (core)',
+        '- tests:',
+        '  - ui pass — archives signed reports with history, then exports them @call:POST:/api/v1/report/archive @call:POST:/api/v1/report/export @option:signedOnly=true @option:withHistory=true — export.spec.ts:24 (chromium)',
+        '',
+        '## PUT:/api/v1/document/{documentId}/name',
+        '',
+        '- marks:',
+        '  - needs-more, whole call — "Rename uses the wrong method." (a, 2026-10-01)',
+        '- called from: /document/:id#DocumentDetail',
+        '- server: method mismatch — the server has core POST /api/v1/document/{documentId}/name',
+        '- tests:',
+        '  - ui fail — rename is refused by the server @call:PUT:/api/v1/document/{documentId}/name — document.spec.ts:4 (chromium)',
         '',
       ].join('\n'),
     );

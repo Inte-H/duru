@@ -28,13 +28,13 @@ and you write the tests.
    When the reviewer presses 「리뷰 끝」 (or presses Ctrl+C in its terminal), the process exits with code 0 and its
    standard output is exactly the task list, the same text `duru tasks <config>` prints. Any other exit is an
    error: show its standard error to the user.
-3. **Write the tests.** In the target project, write tests for each screen in the task list, following its
-   marks and notes. The top of the list says how to tag a test so that it attaches to a screen
+3. **Write the tests.** In the target project, write tests for each screen and API call in the task list,
+   following its marks and notes. The top of the list says how to tag a test so that it attaches to a screen or call
    (`@screen:<screen ID>`, `@call:<call ID>`, `@depth:<depth>`); every new test needs those tags. A test of a
    call that sets an on/off option listed under it also carries `@option:<key>=true|false`. Do not edit
    or add marks: they are the reviewer's.
 4. **Confirm the tests attached.** Run the new tests so that their results are written where the config's
    `tests` entries point, then run `duru rebuild <config>` again. Check the summary: the screens with tests
    should have gone up, and no `unknown` line should name one of your tags. Fix and repeat until they attach.
-   A screen stays in `duru tasks` until a reviewer marks it `fine`, so an unchanged list is expected; offer the
-   user another review round instead.
+   A screen or call stays in `duru tasks` until a reviewer marks it `fine`, so an unchanged list is expected;
+   offer the user another review round instead.

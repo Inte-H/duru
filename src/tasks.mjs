@@ -9,8 +9,8 @@ const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 const guardText = (g) => `\`${g.guard}\`${g.via ? ` through ${g.via}` : ''} (${g.kinds.join(', ')})`;
 
-function markLine(mark) {
-  const where = mark.target.depth ? `${mark.target.depth} depth` : 'whole screen';
+function markLine(mark, whole) {
+  const where = mark.target.depth ? `${mark.target.depth} depth` : whole;
   const note = mark.note ? ` — "${mark.note.replace(/\r?\n/g, '\n    ')}"` : '';
   return `  - ${mark.status}, ${where}${note} (${mark.author}, ${mark.date.slice(0, 10)})`;
 }
@@ -89,31 +89,52 @@ function testLines(tests) {
   ];
 }
 
+function serverText(server) {
+  if (server.status === 'match') return `on the server (${server.labels.join(', ')})`;
+  if (server.status === 'method-mismatch') return `method mismatch — the server has ${server.candidates.join('; ')}`;
+  return 'not on the server';
+}
+
 export function taskList(config) {
   const { map, tests, marks, appLinks } = reviewData(config, null);
   const open = marks.attached.filter((m) => OPEN.includes(m.current.status));
-  const screens = map.screens.filter((s) => open.some((m) => m.target.node === s.id)).sort((a, b) => a.id.localeCompare(b.id));
+  const marked = (node) => open.some((m) => m.target.node === node.id);
+  const screens = map.screens.filter(marked).sort((a, b) => a.id.localeCompare(b.id));
+  const calls = map.calls.filter(marked);
 
   const out = [
-    `# Test tasks — ${count(screens.length, 'screen')}, ${count(open.length, 'open mark')}`,
+    `# Test tasks — ${count(screens.length, 'screen')}, ${count(calls.length, 'call')}, ${count(open.length, 'open mark')}`,
     '',
-    `A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<${DEPTHS.join('|')}>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.`,
+    `A reviewer marked these screens and API calls as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<${DEPTHS.join('|')}>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen or call stays here until a reviewer marks it \`fine\`.`,
     '',
     `Source files are under \`${path.relative(config.configDir, config.srcRoot).split(path.sep).join('/')}\`.`,
   ];
-  if (!screens.length) out.push('', 'No open marks.');
+  if (!open.length) out.push('', 'No open marks.');
   for (const s of screens) {
     out.push(
       '',
       `## ${s.id}`,
       '',
       '- marks:',
-      ...open.filter((m) => m.target.node === s.id).map((m) => markLine(m.current)),
+      ...open.filter((m) => m.target.node === s.id).map((m) => markLine(m.current, 'whole screen')),
       `- component: ${s.componentFile}, route at ${config.routesFile}:${s.line}`,
       ...(appLinks[s.id] ? [`- app: ${appLinks[s.id]}`] : []),
       ...accessLines(s.access),
       ...callLines(s, tests.nodes),
       ...testLines(tests.nodes[s.id]),
+    );
+  }
+  if (calls.length) out.push('', '# API calls');
+  for (const c of calls) {
+    out.push(
+      '',
+      `## ${c.id}`,
+      '',
+      '- marks:',
+      ...open.filter((m) => m.target.node === c.id).map((m) => markLine(m.current, 'whole call')),
+      `- called from: ${c.screens.length ? c.screens.join(', ') : 'no screen'}`,
+      `- server: ${serverText(c.server)}`,
+      ...testLines(tests.nodes[c.id]),
     );
   }
   return out.join('\n') + '\n';
