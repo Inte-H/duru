@@ -45,6 +45,7 @@ class Option {
       REPORT: {
         EXPORT: { METHOD: Enum.HTTP_METHOD.POST, URL: this.API_PATH + 'report/export' },
         ARCHIVE: { METHOD: Enum.HTTP_METHOD.POST, URL: this.API_PATH + 'report/archive' },
+        SCHEDULE: { METHOD: Enum.HTTP_METHOD.POST, URL: this.API_PATH + 'report/schedule' },
       },
       LAB: {
         EXPERIMENT: { METHOD: Enum.HTTP_METHOD.GET, URL: this.API_PATH + 'lab/experiment' },
