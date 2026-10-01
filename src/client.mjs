@@ -211,16 +211,73 @@ export async function extractClient(config) {
 
   const settingsDefaults = loadSettingsDefaults();
 
+  function constInit(nodePath, name, seen) {
+    const binding = nodePath.scope.getBinding(name);
+    if (binding?.kind !== 'const' || seen.has(binding) || !binding.path.isVariableDeclarator() || !binding.path.get('id').isIdentifier()) return null;
+    seen.add(binding);
+    const init = binding.path.get('init');
+    return init.node ? init : null;
+  }
+
+  function objectLiteral(nodePath, seen = new Set()) {
+    if (nodePath.isObjectExpression()) return nodePath;
+    const init = nodePath.isIdentifier() && constInit(nodePath, nodePath.node.name, seen);
+    return init ? objectLiteral(init, seen) : null;
+  }
+
+  const keyName = (node) => String(node.key.name ?? node.key.value);
+  const propertyKey = (prop) => (prop.isObjectProperty() && !prop.node.computed ? keyName(prop.node) : undefined);
+  const isUseState = (callee) =>
+    (callee.type === 'Identifier' && callee.name === 'useState') || (callee.type === 'MemberExpression' && !callee.computed && callee.property.name === 'useState');
+
+  function isToggle(value) {
+    if (value.isBooleanLiteral()) return true;
+    if (!value.isIdentifier()) return false;
+    const binding = value.scope.getBinding(value.node.name);
+    if (binding?.kind !== 'const' || !binding.path.isVariableDeclarator()) return false;
+    const { id, init } = binding.path.node;
+    if (id.type === 'Identifier') return init?.type === 'BooleanLiteral';
+    return (
+      id.type === 'ArrayPattern' &&
+      id.elements[0]?.type === 'Identifier' &&
+      id.elements[0].name === value.node.name &&
+      init?.type === 'CallExpression' &&
+      isUseState(init.callee) &&
+      init.arguments[0]?.type === 'BooleanLiteral'
+    );
+  }
+
+  const mayOverride = (later, key) => later.isSpreadElement() || later.node.computed || keyName(later.node) === key;
+  function overridden(props, i) {
+    const key = propertyKey(props[i]);
+    return props.slice(i + 1).some((later) => mayOverride(later, key));
+  }
+
+  function bodyOptions(callPath) {
+    const options = [];
+    for (const arg of callPath.get('arguments')) {
+      const obj = objectLiteral(arg);
+      if (!obj) continue;
+      const outer = obj.get('properties');
+      const at = outer.findLastIndex((p) => config.bodyArgKeys.includes(propertyKey(p)));
+      if (at >= 0 && overridden(outer, at)) continue;
+      const body = at >= 0 ? objectLiteral(outer[at].get('value')) : obj;
+      const props = body?.get('properties') ?? [];
+      props.forEach((prop, i) => {
+        const key = propertyKey(prop);
+        if (key !== undefined && isToggle(prop.get('value')) && !overridden(props, i)) options.push({ key, line: prop.node.loc.start.line });
+      });
+    }
+    return options;
+  }
+
   // MENUS.ADMIN?.LIST → globalSettings.SYSTEM.MAIN_MENU.ADMIN.LIST
   function settingsPath(nodePath, seen = new Set()) {
     const chain = memberChain(nodePath.node);
     if (!chain) return null;
     if (Object.hasOwn(settingsDefaults, chain[0])) return chain;
-    const binding = nodePath.scope.getBinding(chain[0]);
-    if (binding?.kind !== 'const' || seen.has(binding) || !binding.path.isVariableDeclarator() || !binding.path.get('id').isIdentifier()) return null;
-    seen.add(binding);
-    const init = binding.path.get('init');
-    const base = init.node && settingsPath(init, seen);
+    const init = constInit(nodePath, chain[0], seen);
+    const base = init && settingsPath(init, seen);
     return base ? [...base, ...chain.slice(1)] : null;
   }
 
@@ -343,9 +400,9 @@ export async function extractClient(config) {
       CallExpression(p) {
         const callee = p.node.callee;
         if (callee.type === 'Identifier' && apiNamed.has(callee.name)) {
-          record('apiCalls', { fn: apiNamed.get(callee.name) }, p);
+          record('apiCalls', { fn: apiNamed.get(callee.name), options: bodyOptions(p) }, p);
         } else if (callee.type === 'MemberExpression' && callee.object.type === 'Identifier' && apiNamespaces.has(callee.object.name)) {
-          record('apiCalls', { fn: callee.property.name }, p);
+          record('apiCalls', { fn: callee.property.name, options: bodyOptions(p) }, p);
         }
       },
       'MemberExpression|OptionalMemberExpression'(p) {

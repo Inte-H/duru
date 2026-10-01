@@ -38,6 +38,14 @@ function testSummary(tests) {
 }
 
 function callLines(screen, tests) {
+  const optionKeys = new Map();
+  for (const call of screen.apiCalls) {
+    for (const e of call.endpoints ?? []) {
+      if (!e.callId) continue;
+      if (!optionKeys.has(e.callId)) optionKeys.set(e.callId, new Set());
+      for (const o of call.options ?? []) optionKeys.get(e.callId).add(o.key);
+    }
+  }
   const seen = new Set();
   const lines = [];
   for (const call of screen.apiCalls) {
@@ -53,7 +61,8 @@ function callLines(screen, tests) {
       if (seen.has(e.callId)) continue;
       seen.add(e.callId);
       const server = e.server.status === 'none' ? 'not on the server, ' : '';
-      lines.push(`  - ${e.callId} — ${server}${testSummary(tests[e.callId])}`);
+      const options = [...optionKeys.get(e.callId)].sort();
+      lines.push(`  - ${e.callId} — ${server}${testSummary(tests[e.callId])}${options.length ? ` — options: ${options.join(', ')}` : ''}`);
     }
   }
   return lines.length ? ['- calls:', ...lines] : ['- calls: none'];
