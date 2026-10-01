@@ -22,9 +22,27 @@ if (command === 'tasks') {
   process.stdout.write(taskList(config));
 } else if (command === 'review') {
   const author = gitUserName(config.configDir);
-  const server = await startReviewServer(config, { port: portArg ?? DEFAULT_PORT, author });
-  console.log(`review page http://127.0.0.1:${server.address().port}/`);
-  console.log(`marks ${config.marksDir} | author ${author ?? '(git user.name not set — the page asks for a name)'}`);
+  let ended = false;
+  const end = () => {
+    if (ended) return null;
+    const list = taskList(config);
+    ended = true;
+    return () => {
+      server.close();
+      process.stdout.write(list, () => process.exit(0));
+    };
+  };
+  const server = await startReviewServer(config, { port: portArg ?? DEFAULT_PORT, author, onDone: end });
+  process.on('SIGINT', () => {
+    try {
+      end()?.();
+    } catch (err) {
+      console.error(`could not build the task list: ${err.message}`);
+    }
+  });
+  // 표준 출력에는 작업 목록만 나가야 리뷰를 띄운 에이전트가 그대로 읽을 수 있다.
+  console.error(`review page http://127.0.0.1:${server.address().port}/`);
+  console.error(`marks ${config.marksDir} | author ${author ?? '(git user.name not set — the page asks for a name)'}`);
 } else {
   fs.mkdirSync(config.outDir, { recursive: true });
   const write = (name, data) => {
