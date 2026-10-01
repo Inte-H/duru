@@ -84,6 +84,7 @@ test('each API call becomes a node named by its method and the server path, or t
       ['POST:/api/v1/auth/sign-in', 'match', 'core', 'ajaxSignIn', '/signin#SignIn'],
       ['POST:/api/v1/report/archive', 'match', 'core', 'ajaxReportArchive', '/admin/audit#AdminAudit,/admin/report#AdminReport'],
       ['POST:/api/v1/report/export', 'match', 'core', 'ajaxReportExport', '/admin/audit#AdminAudit,/admin/report#AdminReport'],
+      ['POST:/api/v1/report/schedule', 'match', 'core', 'ajaxReportSchedule', '/admin/audit#AdminAudit,/admin/report#AdminReport'],
       ['PUT:/api/v1/document/{documentId}/name', 'method-mismatch', '', 'ajaxDocumentRename', '/document/:id#DocumentDetail'],
     ],
   );
@@ -108,6 +109,7 @@ test('a call is listed once per API function, and each endpoint on a screen poin
       'ajaxLabExperiment GET:/api/v1/lab/experiment',
       'ajaxReportExport POST:/api/v1/report/export',
       'ajaxReportArchive POST:/api/v1/report/archive',
+      'ajaxReportSchedule POST:/api/v1/report/schedule',
     ],
   );
   const detail = screen(map, '/document/:id#DocumentDetail').apiCalls.flatMap((c) => c.endpoints.map((e) => e.callId));
@@ -574,14 +576,45 @@ const optionsOf = (map, id) => map.calls.find((c) => c.id === id).options;
 test('a call node lists the on/off keys the screens put in its request body, with the screens and lines they were found at', async () => {
   const map = await buildFixture();
   assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export'), [
-    { key: 'withAttachments', values: [true, false], sources: ['source'], sites: exportSites(4) },
-    { key: 'withHistory', values: [true, false], sources: ['source'], sites: exportSites(16) },
-  ]);
-  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), [
-    { key: 'signedOnly', values: [true, false], sources: ['source'], sites: exportSites(18) },
+    { key: 'withAttachments', values: [true, false], sources: ['source'], sites: exportSites(5) },
     { key: 'withHistory', values: [true, false], sources: ['source'], sites: exportSites(18) },
   ]);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), [
+    { key: 'signedOnly', values: [true, false], sources: ['source'], sites: exportSites(20) },
+    { key: 'withHistory', values: [true, false], sources: ['source'], sites: exportSites(20) },
+  ]);
   assert.deepEqual(optionsOf(map, 'POST:/api/v1/archive/document'), []);
+});
+
+test('an option written in bodyOptions is added to its call with the config as its source, even when the body comes from another file', async () => {
+  const map = await buildFixture();
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/schedule'), [{ key: 'weekly', values: [true, false], sources: ['config'], sites: [] }]);
+  assert.deepEqual(map.unknownBodyOptionCalls, []);
+});
+
+test('an option both found in the source and written in bodyOptions is one option with both sources', async () => {
+  const map = await buildCopy((rewrite) =>
+    rewrite('config.json', (src) => {
+      const config = JSON.parse(src);
+      return JSON.stringify({ ...config, bodyOptions: { ...config.bodyOptions, 'POST:/api/v1/report/export': ['withHistory', 'withHistory', 'watermark'] } });
+    }),
+  );
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export'), [
+    { key: 'watermark', values: [true, false], sources: ['config'], sites: [] },
+    { key: 'withAttachments', values: [true, false], sources: ['source'], sites: exportSites(5) },
+    { key: 'withHistory', values: [true, false], sources: ['source', 'config'], sites: exportSites(18) },
+  ]);
+});
+
+test('a call ID in bodyOptions that is not on the map is listed and adds no option', async () => {
+  const map = await buildCopy((rewrite) =>
+    rewrite('config.json', (src) => {
+      const config = JSON.parse(src);
+      return JSON.stringify({ ...config, bodyOptions: { 'POST:/api/v1/report/weekly': ['weekly'], ...config.bodyOptions, 'GET:/api/v1/download': ['inline'] } });
+    }),
+  );
+  assert.deepEqual(map.unknownBodyOptionCalls, ['GET:/api/v1/download', 'POST:/api/v1/report/weekly']);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/schedule').map((o) => o.key), ['weekly']);
 });
 
 test('a key followed by a computed key or a key or getter of the same name is not an option, and a method of another name does not matter', async () => {
@@ -627,3 +660,12 @@ test('bodyArgKeys that is not a list of names is rejected', async () => {
     /bodyArgKeys must be a list of property names/,
   );
 });
+
+for (const bodyOptions of [5, ['weekly'], [['weekly']], { 'POST:/api/v1/report/schedule': 'weekly' }, { 'POST:/api/v1/report/schedule': [true] }]) {
+  test(`bodyOptions ${JSON.stringify(bodyOptions)} is rejected`, async () => {
+    await assert.rejects(
+      buildCopy((rewrite) => rewrite('config.json', (src) => JSON.stringify({ ...JSON.parse(src), bodyOptions }))),
+      /bodyOptions must map call IDs to lists of body keys/,
+    );
+  });
+}

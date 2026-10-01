@@ -5,3 +5,4 @@ core	GET	/api/v1/member/list
 core	POST	/api/v1/auth/sign-in
 core	POST	/api/v1/report/export
 core	POST	/api/v1/report/archive
+core	POST	/api/v1/report/schedule

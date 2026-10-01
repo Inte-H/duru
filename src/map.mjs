@@ -18,8 +18,9 @@ function callOf(e, apiPathPrefix) {
 
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const bySite = (a, b) => compare(a.screen, b.screen) || compare(a.file, b.file) || a.line - b.line;
+const OPTION_SOURCES = ['source', 'config'];
 
-function buildCalls(apiFunctions, screens, apiPathPrefix) {
+function buildCalls(apiFunctions, screens, apiPathPrefix, bodyOptions) {
   const calls = new Map();
   for (const [name, fn] of Object.entries(apiFunctions)) {
     for (const e of fn.endpoints) {
@@ -31,6 +32,10 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
       if (e.server.candidates) node.server.candidates = [...new Set([...node.server.candidates, ...e.server.candidates])].sort();
     }
   }
+  const optionOf = (node, key) => {
+    if (!node.options.has(key)) node.options.set(key, { sources: new Set(), sites: new Map() });
+    return node.options.get(key);
+  };
   for (const s of screens) {
     for (const c of s.apiCalls) {
       for (const e of c.endpoints ?? []) {
@@ -38,13 +43,20 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
         const node = calls.get(e.callId);
         node.screens.add(s.id);
         for (const o of c.options) {
-          if (!node.options.has(o.key)) node.options.set(o.key, new Map());
-          node.options.get(o.key).set(`${s.id}\n${c.file}\n${o.line}`, { screen: s.id, file: c.file, line: o.line });
+          const option = optionOf(node, o.key);
+          option.sources.add('source');
+          option.sites.set(`${s.id}\n${c.file}\n${o.line}`, { screen: s.id, file: c.file, line: o.line });
         }
       }
     }
   }
-  return [...calls.values()]
+  const unknownBodyOptionCalls = [];
+  for (const [id, keys] of Object.entries(bodyOptions)) {
+    const node = calls.get(id);
+    if (!node) unknownBodyOptionCalls.push(id);
+    else for (const key of keys) optionOf(node, key).sources.add('config');
+  }
+  const nodes = [...calls.values()]
     .sort((a, b) => compare(a.id, b.id))
     .map((c) => ({
       ...c,
@@ -52,8 +64,9 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
       screens: [...c.screens].sort(),
       options: [...c.options]
         .sort(([a], [b]) => compare(a, b))
-        .map(([key, sites]) => ({ key, values: [true, false], sources: ['source'], sites: [...sites.values()].sort(bySite) })),
+        .map(([key, o]) => ({ key, values: [true, false], sources: OPTION_SOURCES.filter((src) => o.sources.has(src)), sites: [...o.sites.values()].sort(bySite) })),
     }));
+  return { calls: nodes, unknownBodyOptionCalls: unknownBodyOptionCalls.sort() };
 }
 
 export async function buildMap(config) {
@@ -91,13 +104,16 @@ export async function buildMap(config) {
     }
   }
 
+  const { calls, unknownBodyOptionCalls } = buildCalls(apiFunctions, mapped, apiPathPrefix, config.bodyOptions ?? {});
+
   return {
     meta: { generatedAt: new Date().toISOString(), srcRoot: config.srcRoot, clientRef: config.clientRef ?? null, serverRef: config.serverRef ?? null },
     screens: mapped,
     apiFunctions,
     deadCalls,
     duplicateIds,
-    calls: buildCalls(apiFunctions, mapped, apiPathPrefix),
+    calls,
+    unknownBodyOptionCalls,
     entries,
     unknownEntryPaths,
   };
