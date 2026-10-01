@@ -22,8 +22,8 @@ function accessLines(access) {
     ...access.route.map((g) => `  - route guard ${guardText(g)}`),
     ...access.links.map((l) => {
       const from = `  - link from ${l.from} at ${l.file}:${l.line}`;
-      if (l.guards.length) return `${from}, guard ${l.guards.map(guardText).join('; ')}`;
-      return l.fromRestricted ? `${from}, no guard, but ${l.from} needs one itself` : `${from}, no guard`;
+      const guards = l.guards.length ? `guard ${l.guards.map(guardText).join('; ')}` : 'no guard';
+      return `${from}, ${guards}${l.fromRestricted ? ` — ${l.from} itself opens only under a setting or a role` : ''}`;
     }),
   ];
 }
