@@ -9,6 +9,7 @@ import { loadConfig } from '../src/config.mjs';
 import { chromium } from 'playwright-core';
 import { loadMarks } from '../src/marks.mjs';
 import { startReviewServer } from '../src/review.mjs';
+import { taskList } from '../src/tasks.mjs';
 
 const FIXTURE = path.join(import.meta.dirname, 'fixtures/app');
 const CLI = path.join(import.meta.dirname, '../src/cli.mjs');
@@ -229,10 +230,10 @@ for (const host of ['127.0.0.1', 'localhost']) {
           await p.fill('#left input[type=search]', 'lab');
           assert.deepEqual(await p.locator('#screen-list li .name > span:first-child').allTextContents(), ['/lab', '/lab/result']);
           await p.fill('#left input[type=search]', '');
-          await p.check('#left input[type=checkbox]');
+          await p.check('#left input[name=no-tests]');
           const noTests = await p.locator('#screen-list li').allTextContents();
           assert.ok(noTests.length > 0 && noTests.every((t) => t.includes('테스트 없음')));
-          await p.uncheck('#left input[type=checkbox]');
+          await p.uncheck('#left input[name=no-tests]');
 
           await p.click('#screen-list li:has-text("/document/:id")');
           assert.equal(await p.textContent('#center h3'), '/document/:id');
@@ -266,6 +267,81 @@ for (const host of ['127.0.0.1', 'localhost']) {
     );
   });
 }
+
+test('in a browser, the dead screen filter keeps the screens that call an API missing on the server', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        const names = () => p.locator('#screen-list li .name > span:first-child').allTextContents();
+        await p.check('#left input[name=dead]');
+        assert.deepEqual(await names(), ['/home', '/document/:tab(draft|done)']);
+        assert.deepEqual(await p.locator('#screen-list li .chip.dead').allTextContents(), ['죽은 화면', '죽은 화면']);
+        await p.fill('#left input[type=search]', 'home');
+        assert.deepEqual(await names(), ['/home']);
+        await p.fill('#left input[type=search]', '');
+        await p.check('#left input[name=no-tests]');
+        assert.deepEqual(await names(), []);
+        await p.uncheck('#left input[name=dead]');
+        assert.ok((await names()).length > 0);
+        await p.uncheck('#left input[name=no-tests]');
+        assert.equal((await names()).length, 11);
+      }),
+    ),
+  );
+});
+
+test('in a browser, the chosen screen shows its calls with the server match and tests by depth, and a mark on a call depth reaches the task list', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#screen-list li:has-text("/document/:tab")');
+        assert.deepEqual(await p.locator('table.calls td.call .chip').allTextContents(), ['판정 불가', '서버에 없음']);
+        assert.equal(await p.locator('table.calls tr:has-text("판정 불가") td.cell').count(), 0);
+
+        await p.click('#screen-list li:has-text("/document/:id")');
+        assert.deepEqual(await p.locator('table.calls td.call .chip').allTextContents(), ['서버에 있음 (core)', '메서드 불일치']);
+        const rename = p.locator('table.calls tr', { hasText: 'PUT:/api/v1/document/{documentId}/name' });
+        await rename.locator('td.cell').first().click();
+        assert.match(await p.textContent('#right h2'), /호출 전체/);
+        assert.equal(await p.locator('#right .test').count(), 1);
+        assert.match(await p.textContent('#right .test'), /rename is refused by the server/);
+
+        await rename.locator('td.cell').nth(2).click();
+        assert.match(await p.textContent('#right h2'), /API 깊이/);
+        assert.equal(await p.locator('#right .test').count(), 0);
+        await p.click('#right .statuses button:has-text("없음")');
+        await p.fill('#right textarea', 'no API test for the rename');
+        await p.click('#right button.save');
+        await p.waitForSelector('table.calls td.cell.selected .chip.missing');
+        assert.deepEqual(loadMarks(config.marksDir).map((m) => [m.target, m.status, m.author]), [
+          [{ node: 'PUT:/api/v1/document/{documentId}/name', depth: 'api' }, 'missing', 'reviewer'],
+        ]);
+        assert.match(taskList(config), /^## PUT:\/api\/v1\/document\/\{documentId\}\/name\n\n- marks:\n {2}- missing, api depth — "no API test for the rename" \(reviewer, \d{4}-\d\d-\d\d\)$/m);
+      }),
+    ),
+  );
+});
+
+test('in a browser, reloading a map with no screens while a call is chosen leaves the page empty instead of failing', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#screen-list li:has-text("/document/:id")');
+        await p.locator('table.calls td.cell').first().click();
+        assert.equal((await postMark(base, { target: { node: 'GET:/api/v1/member/list' }, status: 'fine' })).status, 201);
+        const mapFile = path.join(config.outDir, 'map.json');
+        fs.writeFileSync(mapFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(mapFile, 'utf8')), screens: [], entries: [] }));
+        await p.evaluate(() => load().then(render));
+        assert.equal(await p.textContent('#center'), '화면이 없습니다.');
+        assert.equal(await p.textContent('#right'), '');
+        assert.equal(await p.evaluate(() => hasUnsavedMark()), false);
+      }),
+    ),
+  );
+});
 
 test('in a browser, the output depth row comes after the other depths and takes a mark', { skip: browserMissing }, async () => {
   await withRebuiltFixture({}, (config) =>
