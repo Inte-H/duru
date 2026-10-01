@@ -147,9 +147,19 @@ result XML; for Vitest, in the test title, a `describe` title or the test's `tag
 depth of its result source unless it carries `@depth:<ui|api|render|code|data|output>`, which sets the depth for
 that test alone. `output` is for a test that checks the content of what the app produces, such as an
 exported file, rather than only the response; the depth is taken as declared, without checking what the test
-opened. `tests.json` lists the tests per node ID, each with its own depth and status (pass, fail,
-pending; skipped and todo count as pending), the tags that point at IDs not on the map or name an unknown
-depth, how many tests carry no node tag, and configured result paths that do not exist yet.
+opened.
+
+A test of a call that sets on/off options of its request body declares each with
+`@option:<key>=true|false` (`@call:POST:/api/v1/report/export @option:withHistory=true`). An option tag
+attaches to every call among the same test's `@call:` tags that has that key in its `options`; a test that
+turns on two options carries two option tags and counts under both. Under each call, a test lists the
+`options` it attaches to that call as `{ key, value }`, sorted by key; an empty list means the test names no
+option for that call. Screens take no option values.
+
+`tests.json` lists the tests per node ID, each with its own depth and status (pass, fail,
+pending; skipped and todo count as pending), the tags that point at IDs not on the map, name an unknown
+depth, or are option tags with no call of the test to attach to or a value other than `true` or `false`,
+how many tests carry no node tag, and configured result paths that do not exist yet.
 `test/fixtures/app` holds a small fake client with example results and a config.
 
 A check script that is not a test framework reports through verdict lines in its output, one test per line;
@@ -201,7 +211,9 @@ same browser cannot end it.
 one depth is `needs-more` or `missing`. Marks whose current state is `fine` and detached marks are left out.
 Each screen comes with its open marks and notes, the component file and route line, the app address when
 `appUrl` is set, the settings and roles it needs and where they are checked, the API calls it makes with
-their tests and the on/off options this screen sends, and the tests already attached with their depth and status. The list starts with how to tag
+their tests and the on/off options this screen sends, and the tests already attached with their depth and status.
+Under a call with options, one line per option value (`withHistory=true`, `withHistory=false`) and one for
+tests with no option tag (`no option tag`) count the tests by depth and status. The list starts with how to tag
 new tests so that they attach after a `rebuild`. Adding tests does not take a screen off the list; a
 reviewer marking it `fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
 

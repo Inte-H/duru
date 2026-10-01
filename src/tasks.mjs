@@ -37,6 +37,14 @@ function testSummary(tests) {
   return 'tests: ' + [...counts].map(([k, n]) => `${k} ${n}`).join(', ');
 }
 
+function optionLines(keys, tests) {
+  const rows = keys.flatMap((key) =>
+    [true, false].map((value) => [`${key}=${value}`, tests.filter((t) => t.options?.some((o) => o.key === key && o.value === value))]),
+  );
+  rows.push(['no option tag', tests.filter((t) => !t.options?.length)]);
+  return rows.map(([label, matching]) => `    - ${label} — ${testSummary(matching)}`);
+}
+
 function callLines(screen, tests) {
   const optionKeys = new Map();
   for (const call of screen.apiCalls) {
@@ -63,6 +71,7 @@ function callLines(screen, tests) {
       const server = e.server.status === 'none' ? 'not on the server, ' : '';
       const options = [...optionKeys.get(e.callId)].sort();
       lines.push(`  - ${e.callId} — ${server}${testSummary(tests[e.callId])}${options.length ? ` — options: ${options.join(', ')}` : ''}`);
+      if (options.length) lines.push(...optionLines(options, tests[e.callId] ?? []));
     }
   }
   return lines.length ? ['- calls:', ...lines] : ['- calls: none'];
@@ -88,7 +97,7 @@ export function taskList(config) {
   const out = [
     `# Test tasks — ${count(screens.length, 'screen')}, ${count(open.length, 'open mark')}`,
     '',
-    `A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call), add \`@depth:<${DEPTHS.join('|')}>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.`,
+    `A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<${DEPTHS.join('|')}>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.`,
     '',
     `Source files are under \`${path.relative(config.configDir, config.srcRoot).split(path.sep).join('/')}\`.`,
   ];

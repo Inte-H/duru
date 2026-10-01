@@ -38,6 +38,8 @@ test('tags pointing outside the map and tests without a node tag are reported se
     [
       'screen:/settings#Settings home.spec.ts:26',
       'call:DELETE:/api/v1/document/{documentId} document.spec.ts:12',
+      'option:signedOnly=true export.spec.ts:31',
+      'option:withHistory=yes export.spec.ts:31',
       'depth:e2e com.example.help.HelpServiceTest:null',
     ],
   );
@@ -249,5 +251,85 @@ test('a @depth:output tag sets the output depth for one test', () => {
     const result = linkTests(own, { screens: [{ id: '/help#Help' }] });
     assert.deepEqual(result.nodes['/help#Help'].map((t) => t.depth), ['output']);
     assert.deepEqual(result.unknownTags, []);
+  });
+});
+
+const EXPORT = 'POST:/api/v1/report/export';
+const ARCHIVE = 'POST:/api/v1/report/archive';
+const optionsOf = (id) => links.nodes[id].map((t) => [t.line, t.options.map((o) => `${o.key}=${o.value}`).join(' ')]);
+
+test('an @option tag attaches the test to that value of the option on its call', () => {
+  assert.deepEqual(links.nodes[EXPORT][0].options, [{ key: 'withHistory', value: true }]);
+  assert.equal(links.nodes[EXPORT][0].title, `exports with history @call:${EXPORT} @option:withHistory=true`);
+});
+
+test('a test with two @option tags carries both values, and a test without one carries none', () => {
+  assert.deepEqual(optionsOf(EXPORT), [
+    [3, 'withHistory=true'],
+    [10, 'withAttachments=true withHistory=false'],
+    [17, ''],
+    [24, 'withHistory=true'],
+    [31, ''],
+  ]);
+});
+
+test('an @option tag attaches only to the calls of the same test that have that option', () => {
+  assert.deepEqual(optionsOf(ARCHIVE), [[24, 'signedOnly=true withHistory=true']]);
+  assert.equal(Object.hasOwn(links.nodes['/home#Home'][0], 'options'), false);
+});
+
+test('an @option tag with no call of its test to attach to is reported, and the test still counts as untagged without a node tag', () => {
+  const report = reportOf([
+    {
+      title: 'a.spec.ts',
+      specs: [
+        { title: 'opens help @screen:/help#Help @option:withHistory=true', file: 'a.spec.ts', line: 1, tests: [{ status: 'expected' }] },
+        { title: 'exports @option:withHistory=true', file: 'a.spec.ts', line: 5, tests: [{ status: 'expected' }] },
+        { title: 'exports @call:POST:/gone @option:withHistory=false', file: 'a.spec.ts', line: 9, tests: [{ status: 'expected' }] },
+        { title: 'exports @call:GET:/plain @option:withHistory=true', file: 'a.spec.ts', line: 13, tests: [{ status: 'expected' }] },
+      ],
+    },
+  ]);
+  withResults({ 'e2e.json': report }, (own) => {
+    const result = linkTests(own, { screens: [{ id: '/help#Help' }], calls: [{ id: 'GET:/plain', options: [] }] });
+    assert.deepEqual(result.unknownTags.map((u) => `${u.tag} ${u.test.line}`), [
+      'option:withHistory=true 1',
+      'option:withHistory=true 5',
+      'option:withHistory=false 9',
+      'call:POST:/gone 9',
+      'option:withHistory=true 13',
+    ]);
+    assert.equal(result.untaggedCount, 1);
+    assert.deepEqual(result.nodes['GET:/plain'].map((t) => t.options), [[]]);
+  });
+});
+
+test('an @option tag whose value is not true or false, or that has no value, is reported', () => {
+  const report = reportOf([
+    {
+      title: 'a.spec.ts',
+      specs: [{ title: 'exports @call:GET:/x @option:withHistory=TRUE @option:withHistory @option:withHistory=false', file: 'a.spec.ts', line: 1, tests: [{ status: 'expected' }] }],
+    },
+  ]);
+  withResults({ 'e2e.json': report }, (own) => {
+    const result = linkTests(own, { screens: [], calls: [{ id: 'GET:/x', options: [{ key: 'withHistory' }] }] });
+    assert.deepEqual(result.unknownTags.map((u) => u.tag), ['option:withHistory=TRUE', 'option:withHistory']);
+    assert.deepEqual(result.nodes['GET:/x'][0].options, [{ key: 'withHistory', value: false }]);
+  });
+});
+
+test('a test lists its option values for a call by key, whatever order its title gives the tags in', () => {
+  const report = reportOf([
+    {
+      title: 'a.spec.ts',
+      specs: [{ title: 'exports @call:GET:/x @option:withHistory=false @option:withAttachments=true', file: 'a.spec.ts', line: 1, tests: [{ status: 'expected' }] }],
+    },
+  ]);
+  withResults({ 'e2e.json': report }, (own) => {
+    const result = linkTests(own, { screens: [], calls: [{ id: 'GET:/x', options: [{ key: 'withHistory' }, { key: 'withAttachments' }] }] });
+    assert.deepEqual(result.nodes['GET:/x'][0].options, [
+      { key: 'withAttachments', value: true },
+      { key: 'withHistory', value: false },
+    ]);
   });
 });
