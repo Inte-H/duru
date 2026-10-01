@@ -14,6 +14,9 @@ export const READERS = {
 export const DEPTHS = ['ui', 'api', 'render', 'code', 'data', 'output'];
 const NODE_TAG = /^(screen|call):(.+)$/;
 const DEPTH_TAG = /^depth:(.*)$/;
+const OPTION_TAG = /^option:(.*)$/;
+const OPTION_VALUE = /^([^=]+)=(true|false)$/;
+const byKey = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 function resultFiles(p, extensions) {
   if (!fs.statSync(p).isDirectory()) return [p];
@@ -26,6 +29,7 @@ function resultFiles(p, extensions) {
 
 export function linkTests(config, map) {
   const known = new Set([...map.screens.map((s) => `screen:${s.id}`), ...(map.calls ?? []).map((c) => `call:${c.id}`)]);
+  const callOptions = new Map((map.calls ?? []).map((c) => [c.id, new Set((c.options ?? []).map((o) => o.key))]));
   const nodes = {};
   const unknownTags = [];
   const untagged = new Set();
@@ -56,6 +60,16 @@ export function linkTests(config, map) {
           else reportUnknown(tag, t, testKey);
         }
         const nodeTags = t.tags.filter((tag) => NODE_TAG.test(tag));
+        const calls = nodeTags.filter((tag) => known.has(tag) && tag.startsWith('call:')).map((tag) => tag.match(NODE_TAG)[2]);
+        const options = [];
+        for (const tag of t.tags) {
+          const value = tag.match(OPTION_TAG)?.[1];
+          if (value === undefined) continue;
+          const m = value.match(OPTION_VALUE);
+          if (m && calls.some((id) => callOptions.get(id).has(m[1]))) options.push({ key: m[1], value: m[2] === 'true' });
+          else reportUnknown(tag, t, testKey);
+        }
+        options.sort(byKey);
         if (nodeTags.length === 0) {
           untagged.add(testKey);
           continue;
@@ -63,11 +77,13 @@ export function linkTests(config, map) {
         const test = { title: t.title, file: t.file, line: t.line, project: t.project };
         const entry = { ...test, source: resultPath, format: source.format, depth, status: t.status, ...(t.detail && { detail: t.detail }) };
         for (const tag of nodeTags) {
-          if (known.has(tag)) {
-            (nodes[tag.match(NODE_TAG)[2]] ??= []).push(entry);
-          } else {
+          if (!known.has(tag)) {
             reportUnknown(tag, t, testKey);
+            continue;
           }
+          const [, kind, id] = tag.match(NODE_TAG);
+          const own = kind === 'call' ? { ...entry, options: options.filter((o) => callOptions.get(id).has(o.key)) } : entry;
+          (nodes[id] ??= []).push(own);
         }
       }
     }
