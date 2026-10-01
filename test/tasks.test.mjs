@@ -82,7 +82,7 @@ Source files are under \`client/src\`.
   - missing, whole screen (Kim Min, 2026-09-30)
 - component: components/LabResult.js, route at Routes.js:45
 - access: needs a setting
-  - link from /lab#Lab at components/Lab.js:14, no guard, but /lab#Lab needs one itself
+  - link from /lab#Lab at components/Lab.js:14, no guard — /lab#Lab itself opens only under a setting or a role
 - calls: none
 - tests: none
 
@@ -181,6 +181,23 @@ test('a result source configured with the output depth shows its tests and an ou
     assert.match(labResult, /^- tests:\n {2}- output pass — result file — export-checks\.log:1 — the exported file holds every experiment row$/m);
     const home = tasks.split('## /home#Home\n')[1].split('\n## ')[0];
     assert.match(home, /^ {2}- GET:\/api\/v1\/document\/list — tests: output fail 1$/m);
+  });
+});
+
+test('a guarded link from a screen that opens only under a setting says so after its guards', () => {
+  withFixtureCopy(({ copy, configFile, cli }) => {
+    const routes = path.join(copy, 'client/src/Routes.js');
+    const original = fs.readFileSync(routes, 'utf8');
+    const wrapped = original
+      .replace('        <Layout session={session} globalSettings={globalSettings}>\n', '        {globalSettings.SYSTEM.NAV_ENABLED && (\n        <Layout session={session} globalSettings={globalSettings}>\n')
+      .replace('        </Layout>\n', '        </Layout>\n        )}\n');
+    assert.ok(wrapped.includes('NAV_ENABLED && (\n') && wrapped.includes('</Layout>\n        )}\n'));
+    fs.writeFileSync(routes, wrapped);
+    cli('rebuild');
+    addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/report#AdminReport' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    const report = cli('tasks').split('## /admin/report#AdminReport\n')[1].split('\n## ')[0];
+    const fromHome = report.split('\n').find((l) => l.startsWith('  - link from /home#Home'));
+    assert.match(fromHome, /, guard `[^`]+` \(setting\); `[^`]+` \(role\); `MENUS\.ADMIN` \(setting\) — \/home#Home itself opens only under a setting or a role$/);
   });
 });
 

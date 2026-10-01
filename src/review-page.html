@@ -66,6 +66,8 @@
   .test { margin-bottom: 6px; }
   .test .detail { color: var(--muted); font-size: 12px; margin-left: 4px; }
   .guard { display: block; }
+  .chip.kind-setting, .chip.kind-role { color: var(--accent); margin-left: 4px; }
+  .access h3 { font-size: 13px; margin: 10px 0 4px; }
   ul.plain { list-style: none; padding: 0; margin: 0; }
   ul.plain li { margin-bottom: 6px; }
   .statuses { display: flex; gap: 6px; margin: 8px 0; }
@@ -128,9 +130,12 @@ const DEPTH_LABELS = { ui: 'UI/E2E', api: 'API', render: '렌더링만', code: '
 const TEST_STATUS = { pass: '통과', fail: '실패', pending: '보류' };
 const MARK_STATUS = { 'needs-more': '더 필요', missing: '없음', fine: '충분' };
 const SERVER_STATUS = { match: '서버에 있음', 'method-mismatch': '메서드 불일치', none: '서버에 없음', unresolved: '판정 불가' };
+const KIND_LABEL = { setting: '설정', role: '역할' };
 const SCREEN_FILTERS = [
   { key: 'no-tests', label: '테스트 없음만', keep: (s) => testsOf(s.id).length === 0 },
   { key: 'dead', label: '죽은 화면', keep: (s) => s.dead },
+  { key: 'setting', label: '특정 설정에서만 열림', keep: (s) => s.access.kinds.includes('setting') },
+  { key: 'role', label: '특정 역할에서만 열림', keep: (s) => s.access.kinds.includes('role') },
 ];
 
 const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null, ended: false };
@@ -346,9 +351,11 @@ function callTable(s) {
   ];
 }
 
+const inheritedText = (guard, via) => `${guard} (${via} 로 물려받음)`;
+
 function guardList(item) {
   const own = item.guards.map((g) => h('code', { class: 'guard' }, g));
-  const inherited = (item.inheritedGuards ?? []).flatMap((ig) => ig.guards.map((g) => h('code', { class: 'guard' }, `${g}  (${ig.via} 로 물려받음)`)));
+  const inherited = (item.inheritedGuards ?? []).flatMap((ig) => ig.guards.map((g) => h('code', { class: 'guard' }, inheritedText(g, ig.via))));
   return own.length || inherited.length ? [...own, ...inherited] : [h('span', { class: 'muted' }, '조건 없음')];
 }
 
@@ -393,8 +400,26 @@ function callDetails(call, s) {
   ];
 }
 
+const kindChip = (k) => h('span', { class: `chip kind-${k}` }, KIND_LABEL[k]);
+const accessGuard = (g) => h('div', { class: 'guard' },
+  h('code', {}, g.via ? inheritedText(g.guard, g.via) : g.guard), ' ', g.kinds.map(kindChip));
+
+function accessDetails({ access }) {
+  if (!access.restricted) return h('div', { class: 'access' }, h('p', { class: 'muted' }, '설정이나 역할 없이 열립니다.'));
+  return h('div', { class: 'access' },
+    h('div', { class: 'needs' }, '필요한 것 ', access.kinds.map(kindChip)),
+    access.route.length ? h('div', { class: 'route' }, h('h3', {}, '라우트에서 막는 조건'), access.route.map(accessGuard)) : null,
+    h('h3', {}, `들어오는 링크 ${access.links.length}`),
+    h('ul', { class: 'plain' }, access.links.map((l) => h('li', {},
+      h('code', {}, l.from), ' ', h('span', { class: 'muted mono' }, `${l.file}:${l.line}`),
+      l.guards.length ? l.guards.map(accessGuard) : h('div', { class: 'muted' }, '설정 · 역할 조건 없음'),
+      l.fromRestricted ? h('div', { class: 'muted' }, '링크를 건 화면이 설정이나 역할에서만 열림') : null))));
+}
+
 function screenDetails(s) {
   return [
+    h('h2', {}, '열리는 조건'),
+    accessDetails(s),
     h('h2', {}, '소스 위치'),
     h('ul', { class: 'plain' },
       h('li', {}, '라우트 ', h('code', {}, `${state.data.routesFile}:${s.line}`)),
@@ -510,7 +535,6 @@ const countText = (c) => (c.pass + c.fail + c.pending
   ? [c.pass ? h('span', { class: 'ok' }, `✓${c.pass} `) : null, c.fail ? h('span', { class: 'ng' }, `✕${c.fail} `) : null, c.pending ? h('span', { class: 'wait' }, `○${c.pending}`) : null]
   : '테스트 없음');
 const guardText = (alternatives) => alternatives.map((alt) => alt.map((g) => g.guard).join(' & ')).join(' 또는 ');
-const KIND_LABEL = { setting: '설정', role: '역할' };
 
 function layoutTree(roots) {
   const boxes = [];
