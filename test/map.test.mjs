@@ -82,6 +82,8 @@ test('each API call becomes a node named by its method and the server path, or t
       ['GET:/api/v1/member/list', 'match', 'core', 'ajaxMemberList', '/admin/member#AdminMember'],
       ['POST:/api/v1/archive/document', 'none', '', 'ajaxDocumentArchive', '/document/:tab_draft_done_#DocumentList,/home#Home'],
       ['POST:/api/v1/auth/sign-in', 'match', 'core', 'ajaxSignIn', '/signin#SignIn'],
+      ['POST:/api/v1/report/archive', 'match', 'core', 'ajaxReportArchive', '/admin/audit#AdminAudit,/admin/report#AdminReport'],
+      ['POST:/api/v1/report/export', 'match', 'core', 'ajaxReportExport', '/admin/audit#AdminAudit,/admin/report#AdminReport'],
       ['PUT:/api/v1/document/{documentId}/name', 'method-mismatch', '', 'ajaxDocumentRename', '/document/:id#DocumentDetail'],
     ],
   );
@@ -104,6 +106,8 @@ test('a call is listed once per API function, and each endpoint on a screen poin
       'ajaxDownload ',
       'ajaxMemberList GET:/api/v1/member/list',
       'ajaxLabExperiment GET:/api/v1/lab/experiment',
+      'ajaxReportExport POST:/api/v1/report/export',
+      'ajaxReportArchive POST:/api/v1/report/archive',
     ],
   );
   const detail = screen(map, '/document/:id#DocumentDetail').apiCalls.flatMap((c) => c.endpoints.map((e) => e.callId));
@@ -562,4 +566,64 @@ test('a redirect shown only under a setting or a role does not make its target a
   ]);
   assert.deepEqual(map.entries.map((e) => e.screen), ['/signin#SignIn']);
   assert.deepEqual(screen(map, '/help#Help').access.kinds, ['setting']);
+});
+
+const exportSites = (line) => ['/admin/audit#AdminAudit', '/admin/report#AdminReport'].map((s) => ({ screen: s, file: 'components/ExportDialog.js', line }));
+const optionsOf = (map, id) => map.calls.find((c) => c.id === id).options;
+
+test('a call node lists the on/off keys the screens put in its request body, with the screens and lines they were found at', async () => {
+  const map = await buildFixture();
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export'), [
+    { key: 'withAttachments', values: [true, false], sources: ['source'], sites: exportSites(4) },
+    { key: 'withHistory', values: [true, false], sources: ['source'], sites: exportSites(16) },
+  ]);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), [
+    { key: 'signedOnly', values: [true, false], sources: ['source'], sites: exportSites(18) },
+    { key: 'withHistory', values: [true, false], sources: ['source'], sites: exportSites(18) },
+  ]);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/archive/document'), []);
+});
+
+test('a key followed by a computed key or a key or getter of the same name is not an option, and a method of another name does not matter', async () => {
+  const map = await buildCopy((rewrite) =>
+    rewrite('client/src/components/ExportDialog.js', (src) =>
+      src
+        .replace('withAttachments: true }', 'withAttachments: true, [extraKey]: false }')
+        .replace("{ ids, withHistory, format: 'pdf' }", "{ ids, withHistory, format: 'pdf', onDone() {} }")
+        .replace('{ ids, signedOnly, withHistory }', '{ ids, signedOnly, withHistory, signedOnly: ids.length > 0, get withHistory() { return ids.length > 0; } }'),
+    ),
+  );
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export').map((o) => o.key), ['withHistory']);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), []);
+});
+
+test('a later spread overrides the keys before it, and of several bodyArgKeys properties the last is read unless a spread follows it', async () => {
+  const map = await buildCopy((rewrite) =>
+    rewrite('client/src/components/ExportDialog.js', (src) =>
+      src
+        .replace('withAttachments: true }', 'withAttachments: true, ...extra }')
+        .replace("{ ids, withHistory, format: 'pdf' }", '{ data: { ids, withHistory }, data: { ids, signedOnly } }')
+        .replace('{ data: { ids, signedOnly, withHistory } }', '{ data: { ids, signedOnly, withHistory }, ...extra }'),
+    ),
+  );
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export').map((o) => o.key), ['signedOnly']);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), []);
+});
+
+test('without bodyArgKeys in the config, only an object written straight into the call is read as the body', async () => {
+  const map = await buildCopy((rewrite) => rewrite('config.json', (src) => JSON.stringify({ ...JSON.parse(src), bodyArgKeys: undefined })));
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/archive'), []);
+  assert.deepEqual(optionsOf(map, 'POST:/api/v1/report/export').map((o) => o.key), ['withAttachments', 'withHistory']);
+});
+
+test('the options and their order come out the same on every run', async () => {
+  const options = async () => JSON.stringify((await buildFixture()).calls.map((c) => [c.id, c.options]));
+  assert.equal(await options(), await options());
+});
+
+test('bodyArgKeys that is not a list of names is rejected', async () => {
+  await assert.rejects(
+    buildCopy((rewrite) => rewrite('config.json', (src) => JSON.stringify({ ...JSON.parse(src), bodyArgKeys: 'data' }))),
+    /bodyArgKeys must be a list of property names/,
+  );
 });

@@ -42,6 +42,10 @@ class Option {
       MEMBER: {
         LIST: { METHOD: Enum.HTTP_METHOD.GET, URL: this.API_PATH + 'member/list' },
       },
+      REPORT: {
+        EXPORT: { METHOD: Enum.HTTP_METHOD.POST, URL: this.API_PATH + 'report/export' },
+        ARCHIVE: { METHOD: Enum.HTTP_METHOD.POST, URL: this.API_PATH + 'report/archive' },
+      },
       LAB: {
         EXPERIMENT: { METHOD: Enum.HTTP_METHOD.GET, URL: this.API_PATH + 'lab/experiment' },
       },

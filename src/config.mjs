@@ -24,6 +24,10 @@ export function loadConfig(configPath) {
     return { ...t, path: at(t.path) };
   });
   (raw.roleIdentifiers ?? []).forEach(parseRoleEntry);
+  const bodyArgKeys = raw.bodyArgKeys ?? [];
+  if (!Array.isArray(bodyArgKeys) || !bodyArgKeys.every((k) => typeof k === 'string')) {
+    throw new Error(`bodyArgKeys must be a list of property names, such as ["data"], not ${JSON.stringify(raw.bodyArgKeys)}`);
+  }
   const settingsDefaults = raw.settingsDefaults ?? {};
   for (const [root, entry] of Object.entries(settingsDefaults)) {
     if (!(raw.settingsRoots ?? []).includes(root)) throw new Error(`settingsDefaults root "${root}" is not listed in settingsRoots`);
@@ -35,6 +39,7 @@ export function loadConfig(configPath) {
     configDir,
     srcRoot: at(raw.srcRoot),
     roleIdentifiers: raw.roleIdentifiers ?? [],
+    bodyArgKeys,
     settingsDefaults,
     redirectElements: raw.redirectElements ?? ['Redirect'],
     entryPaths: raw.entryPaths ?? [],

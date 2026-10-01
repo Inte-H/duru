@@ -23,3 +23,7 @@ export const ajaxDownload = async (url) => Ajax.request({ info: { METHOD: 'GET',
 export const ajaxMemberList = async () => Ajax.request({ info: Option.REST_API.MEMBER.LIST });
 
 export const ajaxLabExperiment = async () => Ajax.request({ info: Option.REST_API.LAB.EXPERIMENT });
+
+export const ajaxReportExport = async (body) => Ajax.request({ info: Option.REST_API.REPORT.EXPORT, body });
+
+export const ajaxReportArchive = async ({ data }) => Ajax.request({ info: Option.REST_API.REPORT.ARCHIVE, body: data });
