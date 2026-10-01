@@ -11,7 +11,7 @@ export const READERS = {
   vitest: { read: readVitest, extensions: ['.json'] },
   verdict: { read: readVerdicts, extensions: ['.txt', '.log'] },
 };
-export const DEPTHS = ['ui', 'api', 'render', 'code', 'data'];
+export const DEPTHS = ['ui', 'api', 'render', 'code', 'data', 'output'];
 const NODE_TAG = /^(screen|call):(.+)$/;
 const DEPTH_TAG = /^depth:(.*)$/;
 

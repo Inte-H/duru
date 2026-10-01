@@ -51,7 +51,7 @@ test('the page and its data are served, with the map, the tests per screen and t
       assert.equal(data.map.screens.length, 11);
       assert.ok(data.tests.nodes['/home#Home'].length > 0);
       assert.deepEqual(data.marks, { attached: [], detached: [] });
-      assert.deepEqual(data.depths, ['ui', 'api', 'render', 'code', 'data']);
+      assert.deepEqual(data.depths, ['ui', 'api', 'render', 'code', 'data', 'output']);
       assert.equal(data.author, 'reviewer');
     }),
   );
@@ -266,6 +266,24 @@ for (const host of ['127.0.0.1', 'localhost']) {
     );
   });
 }
+
+test('in a browser, the output depth row comes after the other depths and takes a mark', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#screen-list li:has-text("/lab/result")');
+        assert.deepEqual(await p.locator('#center td.depth').allTextContents(), ['화면 전체', 'UI/E2E', 'API', '렌더링만', '코드', '데이터', '산출물']);
+        await p.click('#center tr:has-text("산출물")');
+        assert.match(await p.textContent('#right h2'), /산출물 깊이/);
+        await p.click('#right .statuses button:has-text("더 필요")');
+        await p.click('#right button.save');
+        await p.waitForSelector('#center tr.selected td.mark:has-text("더 필요")');
+        assert.deepEqual(loadMarks(config.marksDir).map((m) => [m.target, m.status]), [[{ node: '/lab/result#LabResult', depth: 'output' }, 'needs-more']]);
+      }),
+    ),
+  );
+});
 
 const screenBox = async (p, id) => {
   const i = await p.$$eval('#flow .box.screen', (els, id) => els.findIndex((e) => e.title.split('\n')[0] === id), id);
