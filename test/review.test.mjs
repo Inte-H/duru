@@ -291,6 +291,40 @@ test('in a browser, the dead screen filter keeps the screens that call an API mi
   );
 });
 
+test('in a browser, the setting and role filters keep the screens that open only under one, and the chosen screen shows why', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        const names = () => p.locator('#screen-list li .name > span:first-child').allTextContents();
+        await p.check('#left input[name=setting]');
+        assert.deepEqual(await names(), ['/help', '/lab', '/lab/result', '/admin/report']);
+        await p.uncheck('#left input[name=setting]');
+        await p.check('#left input[name=role]');
+        assert.deepEqual(await names(), ['/admin/member', '/admin/group', '/admin/audit', '/admin/report']);
+
+        const access = p.locator('#right .access');
+        await p.click('#screen-list li:has-text("/admin/report")');
+        assert.deepEqual(await access.locator('.needs .chip').allTextContents(), ['역할', '설정']);
+        const fromHome = await access.locator('li:has-text("/home#Home")').innerText();
+        assert.match(fromHome, /components\/SideMenu\.js:11/);
+        assert.match(fromHome, /\['ADMIN', 'OWNER'\]\.indexOf\(session\['member\.role'\]\) > -1\s*역할/);
+        assert.match(fromHome, /MENUS\.ADMIN\s*설정/);
+
+        await p.uncheck('#left input[name=role]');
+        await p.click('#screen-list li:has-text("/admin/member")');
+        assert.match(await access.locator('.route').innerText(), /isAdminRole\(memberRole\)\s*역할/);
+        await p.click('#screen-list li:has-text("/lab/result")');
+        assert.match(await access.locator('li:has-text("/lab#Lab")').innerText(), /설정 · 역할 조건 없음\s*링크를 건 화면이 설정이나 역할에서만 열림/);
+        await p.click('#screen-list li:has-text("/help")');
+        assert.match(await access.locator('li:has-text("/signin#SignIn")').innerText(), /globalSettings\.SYSTEM\.HELP_LINK_ENABLED \(openHelp 로 물려받음\)\s*설정/);
+        await p.click('#screen-list li:has-text("/signin")');
+        assert.equal(await access.locator('p').innerText(), '설정이나 역할 없이 열립니다.');
+      }),
+    ),
+  );
+});
+
 test('in a browser, the chosen screen shows its calls with the server match and tests by depth, and a mark on a call depth reaches the task list', { skip: browserMissing }, async () => {
   await withRebuiltFixture({}, (config) =>
     withServer(config, 'reviewer', (base) =>
