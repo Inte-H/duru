@@ -56,7 +56,7 @@ relative to the config file, except the files inside the client source (`routesF
   `Redirect`), and route paths of further screens users start from when the code does not show them
 - `serverEndpoints`, `apiPathPrefix` — one or more server endpoint lists
   (`<label>\t<METHOD>\t<path>` per line, `{var}` for path variables)
-- `tests` — test results to attach, each `{ "format": <playwright|junit|vitest|verdict>, "path": <file or folder>, "depth": <ui|api|render|code|data> }`.
+- `tests` — test results to attach, each `{ "format": <playwright|junit|vitest|verdict>, "path": <file or folder>, "depth": <ui|api|render|code|data|output> }`.
   A folder is searched for `.json` files (Playwright, Vitest), `.xml` files (JUnit) or `.txt` and `.log`
   files (verdict); files in another format are skipped
 - `outDir` — where `map.json` and `tests.json` are written (default: the config's folder)
@@ -124,8 +124,10 @@ guard came from) and `fromRestricted`.
 A test declares the node it covers by putting `@screen:<id>` or `@call:<id>` in its title — for JUnit, in
 the test's or the test class's display name (`@DisplayName`), since `@Tag` annotations do not reach the
 result XML; for Vitest, in the test title, a `describe` title or the test's `tags` option. A test takes the
-depth of its result source unless it carries `@depth:<ui|api|render|code|data>`, which sets the depth for
-that test alone. `tests.json` lists the tests per node ID, each with its own depth and status (pass, fail,
+depth of its result source unless it carries `@depth:<ui|api|render|code|data|output>`, which sets the depth for
+that test alone. `output` is for a test that checks the content of what the app produces, such as an
+exported file, rather than only the response; the depth is taken as declared, without checking what the test
+opened. `tests.json` lists the tests per node ID, each with its own depth and status (pass, fail,
 pending; skipped and todo count as pending), the tags that point at IDs not on the map or name an unknown
 depth, how many tests carry no node tag, and configured result paths that do not exist yet.
 `test/fixtures/app` holds a small fake client with example results and a config.

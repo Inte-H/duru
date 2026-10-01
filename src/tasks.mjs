@@ -79,7 +79,7 @@ export function taskList(config) {
   const out = [
     `# Test tasks — ${count(screens.length, 'screen')}, ${count(open.length, 'open mark')}`,
     '',
-    'A reviewer marked these screens as needing more tests (`needs-more`) or as having none (`missing`). Write the tests, put `@screen:<screen ID>` in each test title (`@call:<call ID>` for a test of one API call), add `@depth:<ui|api|render|code|data>` when the depth of the result source does not fit, then run `duru rebuild` and read this list again. A screen stays here until a reviewer marks it `fine`.',
+    `A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call), add \`@depth:<${DEPTHS.join('|')}>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.`,
     '',
     `Source files are under \`${path.relative(config.configDir, config.srcRoot).split(path.sep).join('/')}\`.`,
   ];

@@ -242,3 +242,12 @@ test('an unknown depth in the config is rejected', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a @depth:output tag sets the output depth for one test', () => {
+  const report = reportOf([{ title: 'a.spec.ts', specs: [{ title: 'exports the report @screen:/help#Help @depth:output', file: 'a.spec.ts', line: 1, tests: [{ status: 'expected' }] }] }]);
+  withResults({ 'e2e.json': report }, (own) => {
+    const result = linkTests(own, { screens: [{ id: '/help#Help' }] });
+    assert.deepEqual(result.nodes['/help#Help'].map((t) => t.depth), ['output']);
+    assert.deepEqual(result.unknownTags, []);
+  });
+});
