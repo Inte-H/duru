@@ -30,7 +30,7 @@ hands the marked screens to a coding agent.
 npm install
 npm run rebuild -- path/to/project-config.json   # map.json + tests.json
 npm run extract -- path/to/project-config.json   # map.json only
-node src/cli.mjs review path/to/project-config.json [--port 4400]   # review page on 127.0.0.1
+node src/cli.mjs review path/to/project-config.json [--port 4400]   # review page on 127.0.0.1, task list when it ends
 node src/cli.mjs tasks path/to/project-config.json > tasks.md        # task list for a coding agent
 npm test
 ```
@@ -164,6 +164,15 @@ mark belongs to is read from the `target` inside the file, not from the folder. 
 marks folder. A mark whose screen is gone from a rebuilt map stays where it is and shows up under
 "detached" until someone deals with it.
 
+`review` prints the page address and the marks folder on standard error and keeps running until the review
+ends. Pressing 「리뷰 끝」 on the page, or Ctrl+C in the terminal, closes the server, prints the task list on
+standard output (the same text as `tasks`, with the marks made during the review) and exits with code 0. A
+coding agent that launched the page therefore receives the task list as soon as the reviewer is done. If the
+list cannot be built at that moment (a mark file that is not valid JSON, for example), the page or the terminal
+shows why and the review keeps running, so it can be ended again once that is fixed. Like
+saving a mark, ending the review needs a JSON request to the page's own address, so another site open in the
+same browser cannot end it.
+
 ## Task list
 
 `tasks` prints, as Markdown on standard output, every screen whose current mark on the whole screen or on
@@ -173,6 +182,19 @@ Each screen comes with its open marks and notes, the component file and route li
 their tests, and the tests already attached with their depth and status. The list starts with how to tag
 new tests so that they attach after a `rebuild`. Adding tests does not take a screen off the list; a
 reviewer marking it `fine` does. `test/fixtures/app/example-marks` holds example marks for the fake client.
+
+## Agent skill
+
+`skills/duru/SKILL.md` is a skill for a coding agent such as Claude Code. When the user asks for a duru review,
+it has the agent rebuild the map, launch `review` and hand the address to the user, write the tests in the
+target project from the task list it receives when the review ends, and rebuild again to confirm they attach.
+duru itself never calls a model. Install it by copying or symlinking the folder into the project's
+`.claude/skills` folder, or into `~/.claude/skills` for every project:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s "$PWD/skills/duru" ~/.claude/skills/duru   # run from this repository
+```
 
 ## License
 
