@@ -56,7 +56,8 @@ Each target project's config, exported source, endpoint lists and generated maps
 The repository holds only generic code.
 
 **The first version maps screens and the API calls made from them.**
-Buttons, option controls, the menu tree and roots without a screen come later.
+Buttons, option controls, the menu tree and roots without a screen come later. On/off options carried in a
+request body, and the output depth, are specified in https://github.com/Inte-H/duru/issues/29
 Reason: most defects sit in actions, and a screen-only map shows a screen with a single render test as
 covered. API calls are the action unit the program can extract reproducibly and already joins with the
 server.
