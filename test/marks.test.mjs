@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { addMark, classifyMarks, loadMarks } from '../src/marks.mjs';
 
-const MAP = { screens: [{ id: '/home#Home' }, { id: '/lab#Lab' }] };
+const MAP = { screens: [{ id: '/home#Home' }, { id: '/lab#Lab' }], calls: [{ id: 'GET:/api/v1/document/list' }] };
 
 function withMarksDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'duru-test-'));
@@ -89,6 +89,17 @@ test('a mark whose node is gone from the map is detached, not dropped', () => {
     assert.deepEqual(attached.map((m) => m.key), ['/lab#Lab data']);
     assert.deepEqual(detached.map((m) => [m.key, m.current.note]), [['/settings#Settings', 'renamed?']]);
     assert.equal(loadMarks(dir).length, 2);
+  });
+});
+
+test('a mark on an API call or on one depth of it is attached while the call is on the map', () => {
+  withMarksDir((dir) => {
+    addMark(dir, { target: { node: 'GET:/api/v1/document/list' }, status: 'missing', author: 'a' });
+    addMark(dir, { target: { node: 'GET:/api/v1/document/list', depth: 'api' }, status: 'needs-more', author: 'a' });
+    addMark(dir, { target: { node: 'DELETE:/api/v1/document/list' }, status: 'missing', author: 'a' });
+    const { attached, detached } = classifyMarks(loadMarks(dir), MAP);
+    assert.deepEqual(attached.map((m) => m.key), ['GET:/api/v1/document/list', 'GET:/api/v1/document/list api']);
+    assert.deepEqual(detached.map((m) => m.key), ['DELETE:/api/v1/document/list']);
   });
 });
 

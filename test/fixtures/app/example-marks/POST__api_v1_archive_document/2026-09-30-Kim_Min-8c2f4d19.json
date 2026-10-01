@@ -1,0 +1,11 @@
+{
+  "id": "8c2f4d19-3e7a-4b05-9d61-2a5c7f0e8b43",
+  "target": {
+    "node": "POST:/api/v1/archive/document",
+    "depth": "api"
+  },
+  "status": "missing",
+  "note": "The server has no archive endpoint; check what the archive button gets back.",
+  "author": "Kim Min",
+  "date": "2026-09-30T02:00:00.000Z"
+}
