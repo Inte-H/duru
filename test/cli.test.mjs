@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,3 +44,91 @@ for (const args of [['nope', 'x.json'], ['extract', 'x.json', 'out.json'], ['reb
     );
   });
 }
+
+const within = (promise, what) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`no ${what} within 10s`)), 10_000).unref())]);
+
+async function withReviewFixture(fn) {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'duru-test-'));
+  try {
+    fs.cpSync(FIXTURE, copy, { recursive: true, filter: (src) => !src.startsWith(path.join(FIXTURE, 'out')) });
+    const configFile = path.join(copy, 'config.json');
+    fs.writeFileSync(configFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(configFile, 'utf8')), marksDir: 'example-marks' }));
+    execFileSync(process.execPath, [CLI, 'rebuild', configFile], { encoding: 'utf8' });
+    return await fn(configFile);
+  } finally {
+    fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+function startReview(configFile) {
+  const child = spawn(process.execPath, [CLI, 'review', configFile, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const out = { stdout: '', stderr: '' };
+  child.stdout.setEncoding('utf8').on('data', (c) => (out.stdout += c));
+  child.stderr.setEncoding('utf8').on('data', (c) => (out.stderr += c));
+  const closed = new Promise((resolve) => child.on('close', (code) => resolve({ code, ...out })));
+  const base = new Promise((resolve, reject) => {
+    child.stderr.on('data', () => {
+      const m = out.stderr.match(/^review page (http:\/\/\S+?)\/?$/m);
+      if (m) resolve(m[1]);
+    });
+    closed.then(() => reject(new Error(`review ended before printing its address:\n${out.stderr}`)));
+  });
+  return { child, base, closed };
+}
+
+for (const [how, end] of [
+  ['the end request', (child, base) => fetch(`${base}/api/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })],
+  ['Ctrl+C', (child) => child.kill('SIGINT')],
+]) {
+  test(`review ended by ${how} exits with 0 and prints the task list, with marks made during the review, on stdout`, async () => {
+    await withReviewFixture(async (configFile) => {
+      const { child, base, closed } = startReview(configFile);
+      try {
+        const url = await within(base, 'review page address on stderr');
+        const mark = await fetch(`${url}/api/marks`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ target: { node: '/lab#Lab' }, status: 'missing', author: 'reviewer' }),
+        });
+        assert.equal(mark.status, 201);
+        await end(child, url);
+
+        const { code, stdout, stderr } = await within(closed, 'exit');
+        assert.equal(code, 0);
+        assert.equal(stdout, execFileSync(process.execPath, [CLI, 'tasks', configFile], { encoding: 'utf8' }));
+        assert.match(stdout, /^## \/lab#Lab$/m);
+        assert.match(stderr, /^marks .* \| author /m);
+      } finally {
+        child.kill();
+      }
+    });
+  });
+}
+
+test('when the task list cannot be built, ending the review reports it and the review keeps running until it can', async () => {
+  await withReviewFixture(async (configFile) => {
+    const { child, base, closed } = startReview(configFile);
+    try {
+      const url = await within(base, 'review page address on stderr');
+      const broken = path.join(path.dirname(configFile), 'example-marks/broken.json');
+      fs.writeFileSync(broken, '{');
+      const endRequest = () => fetch(`${url}/api/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+
+      const refused = await endRequest();
+      assert.equal(refused.status, 500);
+      assert.match(await refused.text(), /broken\.json/);
+      child.kill('SIGINT');
+      await within(new Promise((resolve) => child.stderr.on('data', (c) => /broken\.json/.test(c) && resolve())), 'error on stderr');
+      assert.equal((await fetch(`${url}/`)).status, 200);
+
+      fs.rmSync(broken);
+      assert.equal((await endRequest()).status, 200);
+      const { code, stdout } = await within(closed, 'exit');
+      assert.equal(code, 0);
+      assert.equal(stdout, execFileSync(process.execPath, [CLI, 'tasks', configFile], { encoding: 'utf8' }));
+    } finally {
+      child.kill();
+    }
+  });
+});
