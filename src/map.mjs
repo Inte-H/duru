@@ -16,13 +16,16 @@ function callOf(e, apiPathPrefix) {
   return { id: `${method}:${p}`.replace(TAG_FORBIDDEN, '_'), method, path: p };
 }
 
+const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const bySite = (a, b) => compare(a.screen, b.screen) || compare(a.file, b.file) || a.line - b.line;
+
 function buildCalls(apiFunctions, screens, apiPathPrefix) {
   const calls = new Map();
   for (const [name, fn] of Object.entries(apiFunctions)) {
     for (const e of fn.endpoints) {
       const call = callOf(e, apiPathPrefix);
       if (!call) continue;
-      if (!calls.has(call.id)) calls.set(call.id, { ...call, server: { ...e.server }, apiFunctions: new Set(), screens: new Set() });
+      if (!calls.has(call.id)) calls.set(call.id, { ...call, server: { ...e.server }, apiFunctions: new Set(), screens: new Set(), options: new Map() });
       const node = calls.get(call.id);
       node.apiFunctions.add(name);
       if (e.server.candidates) node.server.candidates = [...new Set([...node.server.candidates, ...e.server.candidates])].sort();
@@ -30,12 +33,27 @@ function buildCalls(apiFunctions, screens, apiPathPrefix) {
   }
   for (const s of screens) {
     for (const c of s.apiCalls) {
-      for (const e of c.endpoints ?? []) if (e.callId) calls.get(e.callId).screens.add(s.id);
+      for (const e of c.endpoints ?? []) {
+        if (!e.callId) continue;
+        const node = calls.get(e.callId);
+        node.screens.add(s.id);
+        for (const o of c.options) {
+          if (!node.options.has(o.key)) node.options.set(o.key, new Map());
+          node.options.get(o.key).set(`${s.id}\n${c.file}\n${o.line}`, { screen: s.id, file: c.file, line: o.line });
+        }
+      }
     }
   }
   return [...calls.values()]
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .map((c) => ({ ...c, apiFunctions: [...c.apiFunctions].sort(), screens: [...c.screens].sort() }));
+    .sort((a, b) => compare(a.id, b.id))
+    .map((c) => ({
+      ...c,
+      apiFunctions: [...c.apiFunctions].sort(),
+      screens: [...c.screens].sort(),
+      options: [...c.options]
+        .sort(([a], [b]) => compare(a, b))
+        .map(([key, sites]) => ({ key, values: [true, false], sources: ['source'], sites: [...sites.values()].sort(bySite) })),
+    }));
 }
 
 export async function buildMap(config) {

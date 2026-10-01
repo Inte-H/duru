@@ -15,6 +15,9 @@
   "passThroughCalls": [
     "stringFormat"
   ],
+  "bodyArgKeys": [
+    "data"
+  ],
   "settingsRoots": [
     "globalSettings"
   ],
