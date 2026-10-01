@@ -18,6 +18,11 @@
   "bodyArgKeys": [
     "data"
   ],
+  "bodyOptions": {
+    "POST:/api/v1/report/schedule": [
+      "weekly"
+    ]
+  },
   "settingsRoots": [
     "globalSettings"
   ],

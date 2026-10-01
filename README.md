@@ -48,6 +48,10 @@ relative to the config file, except the files inside the client source (`routesF
 - `bodyArgKeys` — properties of a call argument that hold the request body (optional, default none), such
   as `data` in `ajaxExport({ data: { withHistory } })`. Without it only an object written straight into the
   call is read as the body
+- `bodyOptions` — on/off keys to add to a call's request body, per call ID (optional), as
+  `{ "POST:/api/v1/report/export": ["withHistory"] }`, for a body the source does not show, such as one built
+  in another file and passed as a variable. A call ID that is not on the map is listed under
+  `unknownBodyOptionCalls` and printed by `extract` and `rebuild`
 - `settingsRoots` — identifiers through which settings are read
 - `settingsDefaults` — where the default values of a settings root are written (optional), as
   `{ "globalSettings": { "file": "store/settings.js", "const": "defaults" } }`: the object literal that a
@@ -108,8 +112,10 @@ function. The body is an object written into the call's arguments, or the object
 property of one; either may be a const of the same file. A body key is an option when its value is `true` or
 `false`, a const initialised to one of them, or the first value of `useState(true)` or `useState(false)`.
 Each option has its `key`, the `values` to test it with (always `[true, false]`, whatever the screen sends),
-`sources` (`source` for one found in the code) and the `sites` it was found at (`screen`, `file`, `line` of
-the key), sorted by key. The same keys and lines are also under each screen's API call as `options`. A key
+`sources` (`source` for one found in the code, `config` for one written in `bodyOptions`, both when it is
+both) and the `sites` it was found at (`screen`, `file`, `line` of the key; none for an option only in the
+config), sorted by key. The keys found in the code and their lines are also under each screen's API call as
+`options`. A key
 followed in the same body by a key or method of the same name, a computed key or a spread
 (`{ withHistory: false, ...prefs }`) is not an option, because the later one may be what is sent; a spread itself
 is not followed. A `bodyArgKeys` property followed in the same way gives no options at all.
