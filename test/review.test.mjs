@@ -178,6 +178,28 @@ test('requests another site could send through the browser are refused', async (
   );
 });
 
+test('the end request asks the caller to get ready, is answered, and then tells the caller to finish, and an end request that is not JSON is refused', async () => {
+  await withRebuiltFixture({}, async (config) => {
+    let done;
+    const ended = new Promise((resolve) => (done = resolve));
+    const server = await startReviewServer(config, { author: 'reviewer', onDone: () => done });
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      const plain = await fetch(`${base}/api/end`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' });
+      assert.equal(plain.status, 415);
+      const signalled = await Promise.race([ended.then(() => true), new Promise((r) => setTimeout(() => r(false), 100))]);
+      assert.equal(signalled, false);
+      assert.equal((await fetch(`${base}/`)).status, 200);
+
+      const res = await fetch(`${base}/api/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      assert.equal(res.status, 200);
+      assert.equal(await Promise.race([ended.then(() => true), new Promise((r) => setTimeout(() => r(false), 1000))]), true);
+    } finally {
+      server.close();
+    }
+  });
+});
+
 const browserMissing = fs.existsSync(chromium.executablePath()) ? false : 'Chromium is not installed (npx playwright-core install chromium)';
 
 async function withPage(base, fn) {
@@ -346,4 +368,76 @@ test('in a browser, one branch is shown on its own, and a late answer for an ear
       }),
     ),
   );
+});
+
+test('in a browser, 「리뷰 끝」 ends the review and the page says so', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, async (config) => {
+    let ends = 0;
+    const server = await startReviewServer(config, { author: 'reviewer', onDone: () => { ends++; } });
+    try {
+      await withPage(`http://127.0.0.1:${server.address().port}`, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('header button:has-text("리뷰 끝")');
+        await p.waitForSelector('#ended');
+        assert.match(await p.textContent('#ended'), /리뷰를 끝냈습니다/);
+        assert.equal(await p.locator('main, #flow, header button').count(), 0);
+        assert.equal(ends, 1);
+      });
+    } finally {
+      server.close();
+    }
+  });
+});
+
+test('in a browser, 「리뷰 끝」 asks before throwing away a mark that was picked but not saved', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, async (config) => {
+    let ends = 0;
+    const server = await startReviewServer(config, { author: 'reviewer', onDone: () => { ends++; } });
+    try {
+      await withPage(`http://127.0.0.1:${server.address().port}`, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#right .statuses button:has-text("없음")');
+        await p.fill('#right textarea', 'draft note');
+
+        const asked = [];
+        p.once('dialog', (d) => { asked.push(d.message()); d.dismiss(); });
+        await p.click('header button:has-text("리뷰 끝")');
+        await p.waitForTimeout(200);
+        assert.equal(asked.length, 1);
+        assert.equal(ends, 0);
+        assert.equal(await p.locator('#ended').count(), 0);
+        assert.equal(await p.inputValue('#right textarea'), 'draft note');
+
+        p.once('dialog', (d) => d.accept());
+        await p.click('header button:has-text("리뷰 끝")');
+        await p.waitForSelector('#ended');
+        assert.equal(ends, 1);
+      });
+    } finally {
+      server.close();
+    }
+  });
+});
+
+test('in a browser, 「리뷰 끝」 after the review already ended elsewhere says so rather than reporting a failure', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, async (config) => {
+    const server = await startReviewServer(config, { author: 'reviewer', onDone: () => () => server.close() });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const browser = await chromium.launch();
+    try {
+      const p = await browser.newPage();
+      await p.goto(base);
+      await p.waitForSelector('#screen-list li');
+      await fetch(`${base}/api/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      await new Promise((resolve) => server.on('close', resolve));
+
+      await p.click('header button:has-text("리뷰 끝")');
+      await p.waitForSelector('#ended');
+      assert.match(await p.textContent('#ended'), /이미/);
+      assert.equal(await p.locator('#end-error').count(), 0);
+    } finally {
+      await browser.close();
+      server.close();
+    }
+  });
 });

@@ -65,12 +65,20 @@ function readBody(req) {
   });
 }
 
-export function startReviewServer(config, { port = 0, author = null } = {}) {
-  // 다른 사이트가 사용자의 브라우저로 표시를 써 넣거나(JSON 이 아닌 요청), 자기 도메인을 이 주소로 돌려 맵을 읽어 가는 것(다른 Host)을 막는다.
+export function startReviewServer(config, { port = 0, author = null, onDone = () => {} } = {}) {
+  // 다른 사이트가 사용자의 브라우저로 표시를 써 넣거나 리뷰를 끝내거나(JSON 이 아닌 요청), 자기 도메인을 이 주소로 돌려 맵을 읽어 가는 것(다른 Host)을 막는다.
   const ownHosts = () => [`127.0.0.1:${server.address().port}`, `localhost:${server.address().port}`];
+  const isJson = (req) => req.headers['content-type']?.startsWith('application/json');
   const server = http.createServer(async (req, res) => {
     try {
       if (!ownHosts().includes(req.headers.host)) return send(res, 403, 'text/plain', 'forbidden host');
+      if (req.method === 'POST' && req.url === '/api/end') {
+        if (!isJson(req)) return send(res, 415, 'text/plain', 'expected application/json');
+        // onDone 이 예외를 던지면 리뷰를 끝내지 않고 500 으로 응답한다.
+        const finish = onDone();
+        if (finish) res.on('close', finish);
+        return send(res, 200, 'text/plain', 'review ended');
+      }
       if (req.method === 'GET' && req.url === '/') return send(res, 200, 'text/html', fs.readFileSync(PAGE, 'utf8'));
       if (req.method === 'GET' && req.url === '/api/data') return send(res, 200, 'application/json', JSON.stringify(reviewData(config, author)));
       const url = new URL(req.url, 'http://host');
@@ -81,7 +89,7 @@ export function startReviewServer(config, { port = 0, author = null } = {}) {
         return send(res, 200, 'application/json', JSON.stringify(buildFlow(map, readJson(path.join(config.outDir, 'tests.json')), { from })));
       }
       if (req.method === 'POST' && req.url === '/api/marks') {
-        if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, 'text/plain', 'expected application/json');
+        if (!isJson(req)) return send(res, 415, 'text/plain', 'expected application/json');
         let input;
         try {
           input = JSON.parse(await readBody(req));
