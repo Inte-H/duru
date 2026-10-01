@@ -27,3 +27,5 @@ export const ajaxLabExperiment = async () => Ajax.request({ info: Option.REST_AP
 export const ajaxReportExport = async (body) => Ajax.request({ info: Option.REST_API.REPORT.EXPORT, body });
 
 export const ajaxReportArchive = async ({ data }) => Ajax.request({ info: Option.REST_API.REPORT.ARCHIVE, body: data });
+
+export const ajaxReportSchedule = async (body) => Ajax.request({ info: Option.REST_API.REPORT.SCHEDULE, body });

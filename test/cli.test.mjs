@@ -28,9 +28,26 @@ test('rebuild writes map.json and tests.json to the configured output folder and
       'PUT:/api/v1/document/{documentId}/name',
     ]);
     assert.match(stdout, /^screens 11 \|/m);
-    assert.match(stdout, /^calls 9 \| dead screens 2$/m);
+    assert.match(stdout, /^calls 10 \| dead screens 2$/m);
     assert.match(stdout, /^screens with tests 7\/11 \| tags pointing outside the map 3 \| tests without a node tag 6$/m);
-    assert.match(stdout, /^calls with tests 1\/9$/m);
+    assert.match(stdout, /^calls with tests 1\/10$/m);
+    assert.doesNotMatch(stdout, /bodyOptions/);
+  } finally {
+    fs.rmSync(copy, { recursive: true, force: true });
+  }
+});
+
+test('rebuild warns about each call ID in bodyOptions that is not on the map', () => {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'duru-test-'));
+  try {
+    fs.cpSync(FIXTURE, copy, { recursive: true, filter: (src) => !src.startsWith(path.join(FIXTURE, 'out')) });
+    const configFile = path.join(copy, 'config.json');
+    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    config.bodyOptions['POST:/api/v1/report/weekly'] = ['weekly'];
+    fs.writeFileSync(configFile, JSON.stringify(config));
+    const stdout = execFileSync(process.execPath, [CLI, 'rebuild', configFile], { encoding: 'utf8' });
+    assert.match(stdout, /^ {2}bodyOptions POST:\/api\/v1\/report\/weekly matches no call$/m);
+    assert.doesNotMatch(stdout, /bodyOptions POST:\/api\/v1\/report\/schedule/);
   } finally {
     fs.rmSync(copy, { recursive: true, force: true });
   }

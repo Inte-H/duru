@@ -28,6 +28,11 @@ export function loadConfig(configPath) {
   if (!Array.isArray(bodyArgKeys) || !bodyArgKeys.every((k) => typeof k === 'string')) {
     throw new Error(`bodyArgKeys must be a list of property names, such as ["data"], not ${JSON.stringify(raw.bodyArgKeys)}`);
   }
+  const bodyOptions = raw.bodyOptions ?? {};
+  const isKeyList = (keys) => Array.isArray(keys) && keys.every((k) => typeof k === 'string');
+  if (typeof bodyOptions !== 'object' || Array.isArray(bodyOptions) || !Object.values(bodyOptions).every(isKeyList)) {
+    throw new Error(`bodyOptions must map call IDs to lists of body keys, such as {"POST:/api/v1/report/export": ["withHistory"]}, not ${JSON.stringify(raw.bodyOptions)}`);
+  }
   const settingsDefaults = raw.settingsDefaults ?? {};
   for (const [root, entry] of Object.entries(settingsDefaults)) {
     if (!(raw.settingsRoots ?? []).includes(root)) throw new Error(`settingsDefaults root "${root}" is not listed in settingsRoots`);
@@ -40,6 +45,7 @@ export function loadConfig(configPath) {
     srcRoot: at(raw.srcRoot),
     roleIdentifiers: raw.roleIdentifiers ?? [],
     bodyArgKeys,
+    bodyOptions,
     settingsDefaults,
     redirectElements: raw.redirectElements ?? ['Redirect'],
     entryPaths: raw.entryPaths ?? [],
