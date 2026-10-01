@@ -1,0 +1,133 @@
+{
+  "config": {
+    "projects": []
+  },
+  "suites": [
+    {
+      "title": "export.spec.ts",
+      "file": "export.spec.ts",
+      "line": 0,
+      "column": 0,
+      "specs": [
+        {
+          "title": "exports with history @call:POST:/api/v1/report/export @option:withHistory=true",
+          "ok": true,
+          "tags": [
+            "call:POST:/api/v1/report/export",
+            "option:withHistory=true"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "expected"
+            }
+          ],
+          "id": "export.spec.ts-3",
+          "file": "export.spec.ts",
+          "line": 3,
+          "column": 1
+        },
+        {
+          "title": "exports a package with attachments and without history @call:POST:/api/v1/report/export @option:withAttachments=true @option:withHistory=false",
+          "ok": false,
+          "tags": [
+            "call:POST:/api/v1/report/export",
+            "option:withAttachments=true",
+            "option:withHistory=false"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "unexpected"
+            }
+          ],
+          "id": "export.spec.ts-10",
+          "file": "export.spec.ts",
+          "line": 10,
+          "column": 1
+        },
+        {
+          "title": "exports the selected reports @call:POST:/api/v1/report/export",
+          "ok": true,
+          "tags": [
+            "call:POST:/api/v1/report/export"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "expected"
+            }
+          ],
+          "id": "export.spec.ts-17",
+          "file": "export.spec.ts",
+          "line": 17,
+          "column": 1
+        },
+        {
+          "title": "archives signed reports with history, then exports them @call:POST:/api/v1/report/archive @call:POST:/api/v1/report/export @option:signedOnly=true @option:withHistory=true",
+          "ok": true,
+          "tags": [
+            "call:POST:/api/v1/report/archive",
+            "call:POST:/api/v1/report/export",
+            "option:signedOnly=true",
+            "option:withHistory=true"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "expected"
+            }
+          ],
+          "id": "export.spec.ts-24",
+          "file": "export.spec.ts",
+          "line": 24,
+          "column": 1
+        },
+        {
+          "title": "exports signed reports only @call:POST:/api/v1/report/export @option:signedOnly=true @option:withHistory=yes",
+          "ok": true,
+          "tags": [
+            "call:POST:/api/v1/report/export",
+            "option:signedOnly=true",
+            "option:withHistory=yes"
+          ],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [],
+              "status": "expected"
+            }
+          ],
+          "id": "export.spec.ts-31",
+          "file": "export.spec.ts",
+          "line": 31,
+          "column": 1
+        }
+      ]
+    }
+  ]
+}

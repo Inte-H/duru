@@ -26,7 +26,7 @@ function withFixtureCopy(fn) {
 
 const EXPECTED = `# Test tasks — 4 screens, 4 open marks
 
-A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call), add \`@depth:<ui|api|render|code|data|output>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.
+A reviewer marked these screens as needing more tests (\`needs-more\`) or as having none (\`missing\`). Write the tests, put \`@screen:<screen ID>\` in each test title (\`@call:<call ID>\` for a test of one API call, with \`@option:<key>=true|false\` for each on/off option the test sets), add \`@depth:<ui|api|render|code|data|output>\` when the depth of the result source does not fit, then run \`duru rebuild\` and read this list again. A screen stays here until a reviewer marks it \`fine\`.
 
 Source files are under \`client/src\`.
 
@@ -174,12 +174,32 @@ test('a result source configured with the output depth shows its tests and an ou
   });
 });
 
-test('a call line in the task list names the on/off options of its request body', () => {
+test('a call line in the task list names the on/off options of its request body, with the tests of each option value by depth', () => {
   withFixtureCopy(({ configFile, cli }) => {
     cli('rebuild');
     addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/report#AdminReport' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
     const report = cli('tasks').split('## /admin/report#AdminReport\n')[1].split('\n## ')[0];
-    assert.match(report, /^- calls:\n {2}- POST:\/api\/v1\/report\/export — no tests — options: withAttachments, withHistory\n {2}- POST:\/api\/v1\/report\/archive — no tests — options: signedOnly, withHistory$/m);
+    assert.equal(
+      report.slice(report.indexOf('- calls:')),
+      [
+        '- calls:',
+        '  - POST:/api/v1/report/export — tests: ui pass 4, ui fail 1 — options: withAttachments, withHistory',
+        '    - withAttachments=true — tests: ui fail 1',
+        '    - withAttachments=false — no tests',
+        '    - withHistory=true — tests: ui pass 2',
+        '    - withHistory=false — tests: ui fail 1',
+        '    - no option tag — tests: ui pass 2',
+        '  - POST:/api/v1/report/archive — tests: ui pass 1 — options: signedOnly, withHistory',
+        '    - signedOnly=true — tests: ui pass 1',
+        '    - signedOnly=false — no tests',
+        '    - withHistory=true — tests: ui pass 1',
+        '    - withHistory=false — no tests',
+        '    - no option tag — no tests',
+        '  - POST:/api/v1/report/schedule — no tests',
+        '- tests: none',
+        '',
+      ].join('\n'),
+    );
   });
 });
 
@@ -192,6 +212,30 @@ test('a call line names only the options its own screen sends', () => {
     cli('rebuild');
     addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/audit#AdminAudit' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
     const audit = cli('tasks').split('## /admin/audit#AdminAudit\n')[1].split('\n## ')[0];
-    assert.match(audit, /^- calls:\n {2}- POST:\/api\/v1\/report\/export — no tests$/m);
+    assert.match(audit, /^- calls:\n {2}- POST:\/api\/v1\/report\/export — tests: ui pass 4, ui fail 1\n- tests: none$/m);
+  });
+});
+
+test('a test whose option tags name only options this screen does not send counts on no option line of the call', () => {
+  withFixtureCopy(({ copy, configFile, cli }) => {
+    fs.writeFileSync(
+      path.join(copy, 'client/src/components/AdminAudit.js'),
+      "import { ajaxReportExport } from '_ajax/AjaxFunc';\n\nexport default function AdminAudit() {\n  return <button onClick={() => ajaxReportExport({ ids: [], withAttachments: true })}>Export</button>;\n}\n",
+    );
+    cli('rebuild');
+    addMark(loadConfig(configFile).marksDir, { target: { node: '/admin/audit#AdminAudit' }, status: 'missing', author: 'a' }, new Date('2026-10-01T05:00:00Z'));
+    const audit = cli('tasks').split('## /admin/audit#AdminAudit\n')[1].split('\n## ')[0];
+    assert.equal(
+      audit.slice(audit.indexOf('- calls:')),
+      [
+        '- calls:',
+        '  - POST:/api/v1/report/export — tests: ui pass 4, ui fail 1 — options: withAttachments',
+        '    - withAttachments=true — tests: ui fail 1',
+        '    - withAttachments=false — no tests',
+        '    - no option tag — tests: ui pass 2',
+        '- tests: none',
+        '',
+      ].join('\n'),
+    );
   });
 });
