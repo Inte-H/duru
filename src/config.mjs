@@ -125,6 +125,10 @@ export function loadConfig(configPath) {
     if (!(raw.settingsRoots ?? []).includes(root)) throw new Error(`settingsDefaults root "${root}" is not listed in settingsRoots`);
     if (typeof entry?.file !== 'string' || typeof entry?.const !== 'string') throw new Error(`settingsDefaults.${root} needs "file" and "const"`);
   }
+  const visitRecords = raw.visitRecords ?? [];
+  if (!Array.isArray(visitRecords) || !visitRecords.every(isText)) {
+    throw new Error(`visitRecords must be a list of record files or folders, such as ["qa/records"], not ${JSON.stringify(raw.visitRecords)}`);
+  }
   const app = raw.app === undefined ? null : appSettings(raw.app, at, raw);
   const outDir = at(raw.outDir ?? '.');
   return {
@@ -141,6 +145,7 @@ export function loadConfig(configPath) {
     outDir,
     marksDir: raw.marksDir ? at(raw.marksDir) : path.join(outDir, 'marks'),
     storiesDir: raw.storiesDir ? at(raw.storiesDir) : path.join(outDir, 'stories'),
+    visitRecords: visitRecords.map(at),
     tests,
     app,
   };

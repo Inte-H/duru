@@ -6,7 +6,7 @@ import { DEPTHS } from './test-links.mjs';
 export const MARK_STATUSES = ['needs-more', 'missing', 'fine'];
 
 // 끝의 `.` 을 바꾸는 것은 Windows 가 그런 이름을 받지 않고, 화면 ID 가 `..` 이면 표시 폴더 밖을 가리키기 때문이다.
-const fileSafe = (s) => s.replace(/[<>:"/\\|?*\x00-\x1f\s]/g, '_').replace(/\.$/, '_');
+export const fileSafe = (s) => s.replace(/[<>:"/\\|?*\x00-\x1f\s]/g, '_').replace(/\.$/, '_');
 
 export function loadMarks(dir) {
   if (!fs.existsSync(dir)) return [];

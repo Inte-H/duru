@@ -105,6 +105,11 @@
   textarea { min-height: 72px; resize: vertical; }
   button.save { margin-top: 8px; padding: 6px 14px; border-radius: 6px; border: 0; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
   button.save:disabled { opacity: .5; cursor: default; }
+  .story-form { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; margin: 0; padding: 0; border: 0; }
+  .story-form button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  .story-form button.discard { background: var(--panel); color: var(--fail); border-color: var(--fail); }
+  .story-form button:disabled { opacity: .5; cursor: default; }
+  .story-path .step .records { flex: none; font-size: 12px; }
   .history li { font-size: 12px; }
   .error { color: var(--fail); }
   a { color: var(--accent); }
@@ -190,7 +195,7 @@ const SCREEN_FILTERS = [
   { key: 'mixed', label: MIXED_KINDS, keep: (s) => s.access.restricted && !s.access.kinds.length },
 ];
 
-const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null, ended: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null };
+const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'list', collapsed: new Set(), openCalls: new Set(), focus: null, flowError: null, ended: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, candidate: null, candidateDraft: null, storyDraft: null, storyError: null, storyWriting: false };
 const authorStore = {
   get() { try { return localStorage.getItem('duru.author') ?? ''; } catch { return ''; } },
   set(v) { try { localStorage.setItem('duru.author', v); } catch {} },
@@ -239,6 +244,7 @@ async function load() {
   }
   const stories = state.data.stories.list;
   if (!stories.some((st) => st.id === state.story)) state.story = stories[0]?.id ?? null;
+  if (!candidateOf()) state.candidate = null;
 }
 
 function select(id) {
@@ -253,6 +259,15 @@ function select(id) {
 
 function selectStory(id) {
   state.story = id;
+  state.candidate = null;
+  state.storyError = null;
+  render();
+}
+
+function selectCandidate(record) {
+  state.candidate = record;
+  state.candidateDraft = null;
+  state.storyError = null;
   render();
 }
 
@@ -336,6 +351,10 @@ function renderLeftList() {
 
 const LINK_VERDICT = { open: '이어짐', conditioned: '조건', broken: '링크 없음', 'off-map': '판정 못 함', unknown: '판정 못 함' };
 const storyOf = () => state.data.stories.list.find((st) => st.id === state.story);
+const candidateOf = () => state.data.candidates.list.find((c) => c.source.record === state.candidate);
+const stepsText = ([first, last]) => (first === last ? `단계 ${first}` : `단계 ${first}–${last}`);
+const sourceText = (source) => `${source.record} · ${stepsText(source.steps)}`;
+const storyDate = (date) => (date.length > 10 ? fmtDate(date) : date);
 const screenOf = (id) => state.data.map.screens.find((s) => s.id === id);
 const screenLabel = (id) => screenOf(id)?.path ?? id;
 const storyChips = (st) => [
@@ -344,17 +363,37 @@ const storyChips = (st) => [
   st.unjudged ? h('span', { class: 'chip l-unknown', title: '주소를 읽지 못한 링크 때문에 판정하지 못한 자리가 있습니다' }, '판정 못 함') : null,
 ];
 
+function candidateGroup() {
+  const { list, notices, stale } = state.data.candidates;
+  return [
+    h('h2', { title: '방문 기록에서 나온 화면 순서입니다. 받으면 스토리 파일이 되고, 버리면 다시 나오지 않습니다.' }, `후보 ${list.length}`),
+    stale
+      ? h('p', { class: 'error', id: 'candidates-stale' }, stale)
+      : list.length
+      ? h('ul', { class: 'screens', id: 'candidate-list' }, list.map((c) => h('li', { class: c.source.record === state.candidate ? 'selected' : '', onclick: () => selectCandidate(c.source.record) },
+          h('span', { class: 'name' }, h('span', {}, c.name), h('div', { class: 'muted mono' }, c.source.record)),
+          storyChips(c),
+          h('span', { class: 'count' }, `화면 ${c.steps.length}`))))
+      : h('p', { class: 'muted', title: '설정의 visitRecords 에 적은 방문 기록에서 나온 후보가 여기 놓입니다.' }, '없음'),
+    ...(notices.length ? [
+      h('h2', { title: '형식이 틀려 건너뛴 방문 기록과 버린 후보 파일입니다.' }, `건너뛴 파일 ${notices.length}`),
+      h('ul', { class: 'plain notices', id: 'candidate-notices' }, notices.map((n) => h('li', {}, h('code', {}, n.file), h('div', { class: 'error' }, n.reason)))),
+    ] : []),
+  ];
+}
+
 function storyList() {
   const { list, notices, stale } = state.data.stories;
   return [
     stale
       ? h('p', { class: 'error' }, stale)
       : list.length
-      ? h('ul', { class: 'screens', id: 'story-list' }, list.map((st) => h('li', { class: st.id === state.story ? 'selected' : '', onclick: () => selectStory(st.id) },
+      ? h('ul', { class: 'screens', id: 'story-list' }, list.map((st) => h('li', { class: st.id === state.story && !state.candidate ? 'selected' : '', onclick: () => selectStory(st.id) },
           h('span', { class: 'name' }, h('span', {}, st.name), h('div', { class: 'muted mono' }, st.id)),
           storyChips(st),
           h('span', { class: 'count' }, `화면 ${st.steps.length}`))))
       : h('p', { class: 'muted' }, '스토리 파일이 없습니다. 스토리 하나를 파일 하나로 ', h('code', {}, state.data.storiesDir), ' 에 둡니다.'),
+    ...candidateGroup(),
     h('h2', {}, `읽지 못한 스토리 파일 ${notices.length}`),
     notices.length
       ? h('ul', { class: 'plain notices' }, notices.map((n) => h('li', {}, h('code', {}, n.file), h('div', { class: 'error' }, n.reason))))
@@ -719,17 +758,20 @@ function renderCenterHead(s) {
   updateSettings(moved ? (list) => autoOverrides(shown, list) : () => null);
 }
 
-function stepItem(step, i) {
+function stepItem(step, i, steps) {
+  const records = steps ? h('span', { class: 'records muted', title: '방문 기록에서 이 화면에 머문 단계' }, stepsText(steps)) : null;
   if (!step.onMap) {
     return h('div', { class: 'step off-map' },
       h('span', { class: 'no' }, i + 1),
       h('span', { class: 'name' }, h('div', { class: 'muted mono' }, step.screen)),
+      records,
       h('span', { class: 'chip l-off-map' }, '맵에 없는 화면'));
   }
   const s = screenOf(step.screen);
   return h('div', { class: 'step on-map', title: '화면 목록에서 이 화면을 엽니다', onclick: () => openScreen(s.id) },
     h('span', { class: 'no' }, i + 1),
-    h('span', { class: 'name' }, h('span', {}, s.path), ' ', h('span', { class: 'muted' }, s.component), h('div', { class: 'muted mono' }, step.screen)));
+    h('span', { class: 'name' }, h('span', {}, s.path), ' ', h('span', { class: 'muted' }, s.component), h('div', { class: 'muted mono' }, step.screen)),
+    records);
 }
 
 const wayItem = (w) => h('li', {}, h('code', {}, `${w.file}:${w.line}`),
@@ -747,20 +789,32 @@ function linkItem(l) {
     l.ways.length > 0 && l.unknownLinks ? skippedLinks(l.unknownLinks) : null);
 }
 
+const storyPath = (st, stepRanges) => [
+  h('h2', {}, `화면 순서 ${st.steps.length}`),
+  h('div', { class: 'story-path' }, st.steps.flatMap((step, i) => [i > 0 ? linkItem(st.links[i - 1]) : null, stepItem(step, i, stepRanges?.[i])])),
+];
+
 function renderStoryCenter() {
   const head = document.getElementById('center-head');
   head.dataset.key = '';
   fill(head);
   const center = document.getElementById('center-body');
+  const c = candidateOf();
+  if (c) {
+    return fill(center,
+      h('div', { class: 'title-row' }, h('h3', {}, c.name), storyChips(c)),
+      h('div', { class: 'muted mono source', title: '후보가 나온 방문 기록과 단계' }, sourceText(c.source)),
+      storyPath(c, c.stepRanges));
+  }
   const st = storyOf();
   if (!st) return fill(center, h('p', { class: 'muted' }, '스토리가 없습니다.'));
   fill(center,
     h('div', { class: 'title-row' }, h('h3', {}, st.name), storyChips(st)),
     h('div', { class: 'muted mono' }, `${st.id} · ${st.file}`),
-    h('div', { class: 'muted' }, `${st.author} · ${st.date}`),
+    st.source ? h('div', { class: 'muted mono source', title: '받은 후보가 나온 방문 기록과 단계' }, sourceText(st.source)) : null,
+    h('div', { class: 'muted' }, `${st.author} · ${storyDate(st.date)}`),
     st.memo ? h('p', { class: 'memo' }, st.memo) : null,
-    h('h2', {}, `화면 순서 ${st.steps.length}`),
-    h('div', { class: 'story-path' }, st.steps.flatMap((step, i) => [i > 0 ? linkItem(st.links[i - 1]) : null, stepItem(step, i)])));
+    storyPath(st));
 }
 
 function reachItem(r) {
@@ -789,18 +843,120 @@ function storyProblems(st) {
   ].filter(Boolean);
 }
 
-function renderStoryRight() {
-  const right = document.getElementById('right');
+const slugOf = (name) => name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+const syncButton = (e, ready) => { e.target.closest('.story-form').querySelector('button').disabled = !ready(); };
+const storyForm = (...children) => h('fieldset', { class: 'story-form', disabled: state.storyWriting }, ...children);
+const storyErrorLine = () => (state.storyError ? h('p', { class: 'error' }, state.storyError) : null);
+
+function candidateActions(c) {
+  const d = (state.candidateDraft ??= { id: slugOf(c.name), name: c.name, reason: '' });
+  const canAccept = () => Boolean(d.id.trim() && d.name.trim());
+  const canDiscard = () => Boolean(d.reason.trim());
+  return [
+    h('h2', {}, '받기'),
+    storyForm(
+      h('input', { type: 'text', id: 'accept-id', value: d.id, placeholder: 'ID', title: '영문 소문자 · 숫자 · - · _ 로 씁니다. 스토리 파일 이름이 됩니다.', oninput: (e) => { d.id = e.target.value; syncButton(e, canAccept); } }),
+      h('input', { type: 'text', id: 'accept-name', value: d.name, placeholder: '이름', oninput: (e) => { d.name = e.target.value; syncButton(e, canAccept); } }),
+      h('button', { class: 'accept', disabled: !canAccept(), title: '이 화면 순서로 스토리 파일을 씁니다.', onclick: acceptChosen }, '스토리로 받기')),
+    h('h2', {}, '버리기'),
+    storyForm(
+      h('input', { type: 'text', id: 'discard-reason', value: d.reason, placeholder: '까닭', oninput: (e) => { d.reason = e.target.value; syncButton(e, canDiscard); } }),
+      h('button', { class: 'discard', disabled: !canDiscard(), title: '버린 후보 파일을 남기고, 같은 화면 순서는 다시 후보로 내지 않습니다.', onclick: discardChosen }, '버리기')),
+    storyErrorLine(),
+  ];
+}
+
+function storyEdit(st) {
+  if (state.storyDraft?.id !== st.id) state.storyDraft = { id: st.id, name: st.name, memo: st.memo };
+  const d = state.storyDraft;
+  const canSave = () => Boolean(d.name.trim());
+  return [
+    h('h2', {}, '이름 · 메모'),
+    storyForm(
+      h('input', { type: 'text', id: 'story-name', value: d.name, placeholder: '이름', oninput: (e) => { d.name = e.target.value; syncButton(e, canSave); } }),
+      h('textarea', { id: 'story-memo', placeholder: '메모', oninput: (e) => { d.memo = e.target.value; } }, d.memo),
+      h('button', { class: 'save-story', disabled: !canSave(), title: '스토리 파일의 이름과 메모를 고쳐 씁니다.', onclick: saveStoryEdit }, '저장')),
+    storyErrorLine(),
+  ];
+}
+
+async function writeStories(url, body) {
+  state.storyError = null;
+  state.storyWriting = true;
+  renderRight();
+  let written = false;
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error(await res.text());
+    written = true;
+    await load();
+  } catch (err) {
+    state.storyError = written ? `저장했지만 다시 읽지 못했습니다: ${err.message}` : `저장하지 못했습니다: ${err.message}`;
+  } finally {
+    state.storyWriting = false;
+  }
+  if (!written) renderRight();
+  return written;
+}
+
+function authorOrAsk() {
+  const author = state.data.author ?? authorStore.get();
+  if (author.trim()) return author;
+  state.storyError = '작성자 이름이 필요합니다.';
+  renderRight();
+  return null;
+}
+
+async function acceptChosen() {
+  const c = candidateOf();
+  const author = authorOrAsk();
+  if (!c || !author) return;
+  const id = state.candidateDraft.id.trim();
+  if (!(await writeStories('/api/candidates/accept', { record: c.source.record, id, name: state.candidateDraft.name, author }))) return;
+  state.candidate = null;
+  state.candidateDraft = null;
+  state.story = id;
+  render();
+}
+
+async function discardChosen() {
+  const c = candidateOf();
+  const author = authorOrAsk();
+  if (!c || !author) return;
+  const at = state.data.candidates.list.indexOf(c);
+  if (!(await writeStories('/api/candidates/discard', { record: c.source.record, reason: state.candidateDraft.reason, author }))) return;
+  const { list } = state.data.candidates;
+  state.candidate = (list[at] ?? list[at - 1])?.source.record ?? null;
+  state.candidateDraft = null;
+  render();
+}
+
+async function saveStoryEdit() {
   const st = storyOf();
-  if (!st) return fill(right);
+  if (!st || !(await writeStories('/api/stories/edit', { id: st.id, name: state.storyDraft.name, memo: state.storyDraft.memo }))) return;
+  state.storyDraft = null;
+  render();
+}
+
+function reachSection(st) {
   const problems = storyProblems(st);
-  fill(right,
+  return [
     (problems.length ? problems : [['reachable', '도달 가능']]).map(([cls, text]) => h('p', { class: `verdict ${cls}` }, text)),
     st.links.some((l) => l.ways.length && l.unknownLinks) ? h('p', { class: 'muted skipped' }, '주소 못 읽은 링크 빼고 판정') : null,
     h('h2', {}, '사전 조건'),
     st.reach.length
       ? h('ul', { class: 'plain reach' }, st.reach.map((r) => h('li', { class: `reach-${r.kind}` }, reachItem(r))))
-      : h('p', { class: 'muted' }, problems.length ? '판정한 구간에 조건 없음' : '조건 없음'));
+      : h('p', { class: 'muted' }, problems.length ? '판정한 구간에 조건 없음' : '조건 없음'),
+  ];
+}
+
+function renderStoryRight() {
+  const right = document.getElementById('right');
+  const c = candidateOf();
+  if (c) return fill(right, ...candidateActions(c), ...reachSection(c));
+  const st = storyOf();
+  if (!st) return fill(right);
+  fill(right, ...reachSection(st), ...storyEdit(st));
 }
 
 function renderCenter() {

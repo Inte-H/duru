@@ -94,6 +94,86 @@ test('the data carries each story checked against the map and the story files th
   );
 });
 
+const postJson = (base, url, body) => fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const CANDIDATES = { storiesDir: 'example-stories', visitRecords: ['example-visits'] };
+const HELP_RECORD = 'example-visits/open-help.json';
+
+test('the data carries the story candidates from the visit records, checked against the map, and the files that could not be read', async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const { candidates } = await (await fetch(`${base}/api/data`)).json();
+      assert.deepEqual(candidates.list.map((c) => [c.name, c.source.record, c.screens.length, c.links.map((l) => l.verdict)]), [
+        ['open-help', HELP_RECORD, 4, ['open', 'off-map', 'off-map']],
+        ['publish-document', 'example-visits/publish-document.json', 4, ['open', 'open', 'conditioned']],
+      ]);
+      assert.deepEqual(candidates.notices, [{ file: 'example-visits/broken-record.json', reason: '2 번째 단계에 url 이 없습니다' }]);
+    }),
+  );
+});
+
+test('a candidate accepted through the page becomes a story file with the server-side author, and leaves the candidates', async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const res = await postJson(base, '/api/candidates/accept', { record: HELP_RECORD, id: 'open-help', name: '홈에서 도움말을 연다', author: 'someone else' });
+      assert.equal(res.status, 201);
+      const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'open-help.json'), 'utf8'));
+      assert.equal(saved.author, 'reviewer');
+      assert.deepEqual(saved.source, { record: HELP_RECORD, steps: [1, 5] });
+      const data = await (await fetch(`${base}/api/data`)).json();
+      assert.ok(data.stories.list.some((s) => s.id === 'open-help' && s.name === '홈에서 도움말을 연다'));
+      assert.deepEqual(data.candidates.list.map((c) => c.name), ['publish-document']);
+
+      assert.equal((await postJson(base, '/api/candidates/accept', { record: HELP_RECORD, id: 'again', name: 'x' })).status, 404);
+      const taken = await postJson(base, '/api/candidates/accept', { record: 'example-visits/publish-document.json', id: 'run-lab', name: 'x' });
+      assert.equal(taken.status, 400);
+      assert.match(await taken.text(), /run-lab\.json 이 이미 씁니다/);
+    }),
+  );
+});
+
+test('a candidate discarded through the page is kept in the discarded folder and does not come back after the map is rebuilt', async () => {
+  await withRebuiltFixture(CANDIDATES, async (config, copy) => {
+    await withServer(config, null, async (base) => {
+      assert.equal((await postJson(base, '/api/candidates/discard', { record: HELP_RECORD, reason: '베타 화면' })).status, 400);
+      assert.equal((await postJson(base, '/api/candidates/discard', { record: HELP_RECORD, reason: '베타 화면', author: 'typed name' })).status, 201);
+    });
+    const [file] = fs.readdirSync(path.join(config.storiesDir, 'discarded'));
+    const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'discarded', file), 'utf8'));
+    assert.deepEqual([saved.reason, saved.author], ['베타 화면', 'typed name']);
+    rebuild(copy);
+    await withServer(config, 'reviewer', async (base) => {
+      const data = await (await fetch(`${base}/api/data`)).json();
+      assert.deepEqual(data.candidates.list.map((c) => c.name), ['publish-document']);
+      assert.ok(!data.stories.list.some((s) => s.name === 'open-help'));
+    });
+  });
+});
+
+test('a story name and memo edited through the page are written into its file', async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const res = await postJson(base, '/api/stories/edit', { id: 'run-lab', name: '실험실 결과를 본다', memo: '실험실 설정을 켠다.' });
+      assert.equal(res.status, 200);
+      const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'run-lab.json'), 'utf8'));
+      assert.deepEqual([saved.name, saved.memo, saved.author], ['실험실 결과를 본다', '실험실 설정을 켠다.', 'Kim Min']);
+      assert.equal((await postJson(base, '/api/stories/edit', { id: 'run-lab', name: '' })).status, 400);
+      assert.equal((await postJson(base, '/api/stories/edit', { id: 'nope', name: 'x', memo: '' })).status, 400);
+    }),
+  );
+});
+
+test('story writes that are not JSON requests are refused', async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      for (const url of ['/api/candidates/accept', '/api/candidates/discard', '/api/stories/edit']) {
+        const res = await fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' });
+        assert.equal(res.status, 415, url);
+      }
+      assert.ok(!fs.existsSync(path.join(config.storiesDir, 'discarded')));
+    }),
+  );
+});
+
 test('a mark posted from the page is saved with the server-side author and date and is there after reopening', async () => {
   await withRebuiltFixture({}, async (config) => {
     await withServer(config, 'reviewer', async (base) => {
@@ -1127,6 +1207,207 @@ test('in a browser, the story list sits next to the screen list, and a chosen st
         await p.waitForSelector('main:not([hidden])');
         assert.equal(await p.textContent('#left .views.side button.on'), '화면 11');
         assert.equal(await p.textContent('#center h3'), '/lab/result');
+      }),
+    ),
+  );
+});
+
+const chipsIn = (p, list) => p.locator(`${list} li`).evaluateAll((items) => items.map((li) => [...li.querySelectorAll('.chip')].map((c) => c.textContent)));
+
+test('in a browser, the story list has a group of candidates, a chosen candidate shows its path like a story with the record steps behind each screen, and accepting it writes a story file and moves it to the story list', { skip: browserMissing }, async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        assert.match(await p.textContent('#left'), /후보 2/);
+        assert.deepEqual(await p.locator('#candidate-list li .name > span:first-child').allTextContents(), ['open-help', 'publish-document']);
+        assert.deepEqual(await chipsIn(p, '#candidate-list'), [['화면 없음'], []]);
+        assert.deepEqual(await p.locator('#candidate-notices li code').allTextContents(), ['example-visits/broken-record.json']);
+        assert.match(await p.textContent('#left'), /건너뛴 파일 1/);
+
+        await p.click('#candidate-list li:has-text("open-help")');
+        assert.equal(await p.locator('#story-list li.selected').count(), 0);
+        assert.equal(await p.textContent('#center h3'), 'open-help');
+        assert.equal(await p.textContent('#center .source'), 'example-visits/open-help.json · 단계 1–5');
+        assert.deepEqual(await p.locator('#center .story-path .step .records').allTextContents(), ['단계 1', '단계 2', '단계 3–4', '단계 5']);
+        assert.equal(await p.textContent('#center .story-path .step.off-map .mono'), '/beta/inbox');
+        assert.deepEqual(await p.locator('#center .story-path .link > .chip').allTextContents(), ['이어짐', '판정 못 함', '판정 못 함']);
+        assert.deepEqual(await p.locator('#right .verdict').allTextContents(), ['판정 못 함 · 화면 없음']);
+        assert.deepEqual(await p.locator('#right h2').allTextContents(), ['받기', '버리기', '사전 조건']);
+        assert.equal(await p.inputValue('#accept-id'), 'open-help');
+        assert.equal(await p.inputValue('#accept-name'), 'open-help');
+        assert.equal(await p.textContent('#right button.accept'), '스토리로 받기');
+
+        await p.fill('#accept-name', '');
+        assert.equal(await p.isDisabled('#right button.accept'), true);
+        await p.fill('#accept-name', '홈에서 도움말을 연다');
+        await p.click('#right button.accept');
+        await p.waitForSelector('#story-list li.selected:has-text("홈에서 도움말을 연다")');
+        assert.deepEqual(await p.locator('#candidate-list li .name > span:first-child').allTextContents(), ['publish-document']);
+        assert.equal(await p.textContent('#center h3'), '홈에서 도움말을 연다');
+        assert.match(await p.textContent('#center .source'), /^example-visits\/open-help\.json · 단계 1–5$/);
+        const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'open-help.json'), 'utf8'));
+        assert.deepEqual([saved.name, saved.author, saved.screens.length], ['홈에서 도움말을 연다', 'reviewer', 4]);
+      }),
+    ),
+  );
+});
+
+test('in a browser, discarding a candidate takes a reason and the name typed on the page, writes the discarded file, and moves on to the next candidate', { skip: browserMissing }, async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, null, (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        await p.click('#candidate-list li:has-text("open-help")');
+        assert.equal(await p.isDisabled('#right button.discard'), true);
+        await p.fill('#discard-reason', '베타 화면');
+        await p.click('#right button.discard');
+        await p.waitForSelector('#right .error');
+        assert.match(await p.textContent('#right .error'), /작성자 이름이 필요합니다/);
+        assert.ok(!fs.existsSync(path.join(config.storiesDir, 'discarded')));
+
+        await p.fill('#author input', 'typed name');
+        await p.click('#right button.discard');
+        await p.waitForSelector('#candidate-list li:only-child');
+        assert.equal(await p.textContent('#candidate-list li.selected .name > span:first-child'), 'publish-document');
+        assert.equal(await p.textContent('#center h3'), 'publish-document');
+        assert.equal(await p.inputValue('#discard-reason'), '');
+        const [file] = fs.readdirSync(path.join(config.storiesDir, 'discarded'));
+        const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'discarded', file), 'utf8'));
+        assert.deepEqual([saved.name, saved.reason, saved.author], ['open-help', '베타 화면', 'typed name']);
+
+        await p.fill('#discard-reason', '중복');
+        await p.click('#right button.discard');
+        await p.waitForSelector('#candidate-list', { state: 'detached' });
+        assert.match(await p.textContent('#left'), /후보 0/);
+        assert.equal(await p.locator('#story-list li.selected').count(), 1);
+      }),
+    ),
+  );
+});
+
+test('in a browser, after a candidate is accepted the name and memo form holds the new story, not the story viewed before', { skip: browserMissing }, async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        await p.click('#story-list li:has-text("실험실을 열어")');
+        assert.equal(await p.inputValue('#story-name'), '실험실을 열어 결과를 본다');
+        await p.click('#candidate-list li:has-text("open-help")');
+        await p.fill('#accept-name', '홈에서 도움말을 연다');
+        await p.click('#right button.accept');
+        await p.waitForSelector('#story-list li.selected:has-text("홈에서 도움말을 연다")');
+        assert.equal(await p.inputValue('#story-name'), '홈에서 도움말을 연다');
+        assert.equal(await p.inputValue('#story-memo'), '');
+      }),
+    ),
+  );
+});
+
+const enabledControls = (p) => p.locator('#right input, #right textarea, #right button').evaluateAll((els) => els.filter((e) => !e.matches(':disabled')).map((e) => e.id || e.className));
+
+async function expectSoon(check, ms = 5000) {
+  const until = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > until) throw new Error('the expected request was not sent');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+function holdRequests(p, pattern) {
+  const held = { sent: [], gates: [] };
+  held.done = p.route(pattern, async (route) => {
+    held.sent.push(new URL(route.request().url()).pathname);
+    await new Promise((resolve) => held.gates.push(resolve));
+    await route.continue();
+  });
+  held.release = () => held.gates.splice(0).forEach((open) => open());
+  return held;
+}
+
+test('in a browser, the whole 받기, 버리기 and 이름 · 메모 form stays disabled while its write and the reload after it are on their way', { skip: browserMissing }, async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        await p.click('#candidate-list li:has-text("open-help")');
+        await p.fill('#discard-reason', '베타 화면');
+        const writes = holdRequests(p, '**/api/{candidates/*,stories/edit}');
+        await writes.done;
+        await p.click('#right button.accept');
+        await p.waitForFunction(() => document.querySelector('#right button.accept').matches(':disabled'));
+        assert.deepEqual(await enabledControls(p), []);
+        const reloads = holdRequests(p, '**/api/data');
+        await reloads.done;
+        writes.release();
+        await expectSoon(() => reloads.sent.length === 1);
+        assert.deepEqual(await enabledControls(p), []);
+        reloads.release();
+        await p.waitForSelector('#story-list li.selected:has-text("open-help")');
+        assert.deepEqual(writes.sent, ['/api/candidates/accept']);
+        assert.ok((await enabledControls(p)).includes('story-name'));
+
+        await p.fill('#story-name', '도움말을 연다');
+        await p.click('#right button.save-story');
+        await p.waitForFunction(() => document.querySelector('#story-name').matches(':disabled'));
+        assert.deepEqual(await enabledControls(p), []);
+        await expectSoon(() => writes.sent.length === 2);
+        writes.release();
+        await expectSoon(() => reloads.sent.length === 2);
+        assert.deepEqual(await enabledControls(p), []);
+        reloads.release();
+        await p.waitForSelector('#story-list li.selected:has-text("도움말을 연다")');
+        assert.deepEqual(writes.sent, ['/api/candidates/accept', '/api/stories/edit']);
+        assert.equal(await p.inputValue('#story-name'), '도움말을 연다');
+        assert.equal(await p.locator('#right .error').count(), 0);
+      }),
+    ),
+  );
+});
+
+test('in a browser, with visit records and a map built before links carried their conditions, the candidates group asks to rebuild instead of showing none', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({ visitRecords: ['example-visits'] }, async (config) => {
+    const mapFile = path.join(config.outDir, 'map.json');
+    const map = JSON.parse(fs.readFileSync(mapFile, 'utf8'));
+    for (const s of map.screens) for (const l of s.links) delete l.conditions;
+    fs.writeFileSync(mapFile, JSON.stringify(map));
+    await withServer(config, 'reviewer', async (base) => {
+      const { candidates } = await (await fetch(`${base}/api/data`)).json();
+      assert.match(candidates.stale, /후보를 맞춰 보지 못했습니다\. duru rebuild 로 맵을 다시 만드세요$/);
+      await withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        assert.match(await p.textContent('#candidates-stale'), /후보를 맞춰 보지 못했습니다/);
+        assert.equal(await p.locator('#candidate-list').count(), 0);
+      });
+    });
+  });
+});
+
+test('in a browser, a chosen story\'s name and memo can be changed on the right, and saving writes them into its file', { skip: browserMissing }, async () => {
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#left .views.side button:has-text("스토리")');
+        await p.click('#story-list li:has-text("실험실을 열어")');
+        assert.deepEqual(await p.locator('#right h2').allTextContents(), ['사전 조건', '이름 · 메모']);
+        assert.equal(await p.inputValue('#story-name'), '실험실을 열어 결과를 본다');
+        assert.equal(await p.inputValue('#story-memo'), '실험실은 고객사 설정에서 켜야 보인다.');
+        await p.fill('#story-name', '');
+        assert.equal(await p.isDisabled('#right button.save-story'), true);
+        await p.fill('#story-name', '실험실 결과를 본다');
+        await p.fill('#story-memo', '실험실 설정을 켠다.');
+        await p.click('#right button.save-story');
+        await p.waitForSelector('#story-list li.selected:has-text("실험실 결과를 본다")');
+        assert.equal(await p.textContent('#center h3'), '실험실 결과를 본다');
+        assert.equal(await p.textContent('#center .memo'), '실험실 설정을 켠다.');
+        const saved = JSON.parse(fs.readFileSync(path.join(config.storiesDir, 'run-lab.json'), 'utf8'));
+        assert.deepEqual([saved.name, saved.memo, saved.author, saved.date], ['실험실 결과를 본다', '실험실 설정을 켠다.', 'Kim Min', '2026-10-01']);
       }),
     ),
   );

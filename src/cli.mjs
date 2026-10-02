@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { storyCandidates } from './candidates.mjs';
 import { loadConfig } from './config.mjs';
 import { buildMap } from './map.mjs';
 import { gitUserName, startReviewServer } from './review.mjs';
@@ -78,5 +79,8 @@ if (command === 'tasks') {
     console.log(`stories ${list.length} | broken paths ${list.filter((s) => s.broken).length} | detached ${list.filter((s) => s.detached).length} | unjudged steps ${unjudged} | story files skipped ${notices.length}`);
     for (const n of notices) console.log(`  story file ${n.file}: ${n.reason}`);
     if (stale) console.log(`  ${stale}`);
+    const candidates = storyCandidates(config, map, path.join(config.outDir, 'map.json'));
+    console.log(`story candidates ${candidates.list.length} | files skipped ${candidates.notices.length}`);
+    for (const n of candidates.notices) console.log(`  ${n.file}: ${n.reason}`);
   }
 }

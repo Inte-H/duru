@@ -54,10 +54,13 @@ export function checkStories(map, stories) {
   });
 }
 
+export const linksWithoutConditions = (map) => map.screens.some((s) => s.links.some((l) => !Array.isArray(l.conditions)));
+export const staleMapMessage = (mapFile, what) => `${mapFile} 은 링크에 조건이 없는 예전 duru 로 만든 맵이라 ${what}를 맞춰 보지 못했습니다. duru rebuild 로 맵을 다시 만드세요`;
+
 export function checkStoryFiles(map, dir, mapFile) {
   const { stories, notices } = loadStories(dir);
-  if (stories.length && map.screens.some((s) => s.links.some((l) => !Array.isArray(l.conditions)))) {
-    return { list: [], notices, stale: `${mapFile} 은 링크에 조건이 없는 예전 duru 로 만든 맵이라 스토리를 맞춰 보지 못했습니다. duru rebuild 로 맵을 다시 만드세요` };
+  if (stories.length && linksWithoutConditions(map)) {
+    return { list: [], notices, stale: staleMapMessage(mapFile, '스토리') };
   }
   return { list: checkStories(map, stories), notices };
 }
