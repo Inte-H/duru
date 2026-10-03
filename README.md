@@ -266,8 +266,7 @@ known. Any other form (a function call, `!==`, `||`, a comparison with a non-lit
 link into it that carries a setting guard (`from` the screen, `file`, `line`), each with the `needs` of its readable guards and the
 `unreadable` guards with their `reason`. Among those links, one with no setting guard of its own from a screen whose `kinds`
 include `setting` carries what that screen needs: its route guards' needs and the needs every way into it shares. Its entry
-has `inherited: true` when it carries any; an unreadable guard is passed on only when every way into that screen has one, and
-ways that need different settings add an unreadable entry naming that screen. The evaluated `settingsDefaults` are written to `map.json` too, with
+has `inherited: true` when it carries any, and an unreadable guard is passed on only when every way into that screen has one. The evaluated `settingsDefaults` are written to `map.json` too, with
 `settingsDefaultsIncomplete`, which lists per root the places the source does not show in full: `[section,
 key]` for a key whose value holds something duru cannot read (such as `window.X || [...]`, a call, a spread,
 a computed key, or a constant that is not configured), `[section]` for a section whose keys cannot all be

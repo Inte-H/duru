@@ -338,7 +338,7 @@ test('a link with no setting guard of its own carries the settings its restricte
   assert.deepEqual(needPaths(loopListedFirst['/b'].settings), [['/a', ['MENU.X']]]);
 });
 
-test('a link that carries its origin\'s settings is marked as inherited, and says so when the ways into the origin need different settings', () => {
+test('a link that carries its origin\'s settings is marked as inherited and carries what every way into the origin needs', () => {
   const even = settingAccess([
     ['/start', [], [['/a', [MENU_X]], ['/a', [MENU_X]]]],
     ['/a', [], [['/b', []]]],
@@ -351,8 +351,7 @@ test('a link that carries its origin\'s settings is marked as inherited, and say
     ['/a', [], [['/b', []]]],
     ['/b', [], []],
   ]);
-  assert.deepEqual(needPaths(uneven['/b'].settings), [['/a', ['MENU.X']]]);
-  assert.deepEqual(uneven['/b'].settings[0].unreadable, [{ guard: '/a', reason: '출발 화면으로 들어가는 길마다 필요한 설정이 다릅니다' }]);
+  assert.deepEqual(uneven['/b'].settings.map((x) => [x.from, x.needs.map((n) => n.path.join('.')), x.unreadable]), [['/a', ['MENU.X'], []]]);
 });
 
 test('an unreadable setting guard on one of several ways into a restricted origin is not passed on', () => {
