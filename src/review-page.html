@@ -795,9 +795,9 @@ function renderStoryRight() {
   if (!st) return fill(right);
   const problems = storyProblems(st);
   fill(right,
-    h('h2', {}, '사전 조건'),
     (problems.length ? problems : [['reachable', '도달 가능']]).map(([cls, text]) => h('p', { class: `verdict ${cls}` }, text)),
     st.links.some((l) => l.ways.length && l.unknownLinks) ? h('p', { class: 'muted skipped' }, '주소 못 읽은 링크 빼고 판정') : null,
+    h('h2', {}, '사전 조건'),
     st.reach.length
       ? h('ul', { class: 'plain reach' }, st.reach.map((r) => h('li', { class: `reach-${r.kind}` }, reachItem(r))))
       : h('p', { class: 'muted' }, problems.length ? '판정한 구간에 조건 없음' : '조건 없음'));

@@ -1094,8 +1094,7 @@ test('in a browser, the story list sits next to the screen list, and a chosen st
         assert.deepEqual(await p.locator('#center .story-path .step .name > span:first-child').allTextContents(), ['/home', '/lab', '/lab/result']);
         assert.deepEqual(await p.locator('#center .story-path .link > .chip').allTextContents(), ['조건', '이어짐']);
         assert.match(await p.textContent('#center .story-path .link.l-conditioned'), /components\/Home\.js:19\s*globalSettings\.SYSTEM\.LAB_ENABLED\s*설정/);
-        assert.equal(await p.textContent('#right h2'), '사전 조건');
-        assert.deepEqual(await p.locator('#right .verdict').allTextContents(), ['도달 가능']);
+        assert.deepEqual(await p.locator('#right > *').evaluateAll((els) => els.slice(0, 2).map((e) => e.textContent)), ['도달 가능', '사전 조건']);
         assert.deepEqual(await p.locator('#right .reach > li h3').allTextContents(), ['/home → /lab', '/lab 라우트']);
         assert.match(await p.textContent('#right .reach-link'), /components\/Home\.js:19/);
         assert.match(await p.textContent('#right .reach-route'), /Routes\.js:44.*globalSettings\.SYSTEM\.LAB_ENABLED/);

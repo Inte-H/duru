@@ -454,11 +454,11 @@ with the verdict of the link between each two: 「이어짐」, 「조건」 or 
 not have or where no link joins the two but the first screen has links to a path duru cannot read (listed
 with their source locations and paths), with the source location and conditions of every link; a `conditioned`
 step also lists, as left out of the verdict, the first screen's links to a path duru cannot read. Pressing a
-screen on the map opens it in the screen list. The right shows 「사전 조건」: first the verdict on every line that applies —
+screen on the map opens it in the screen list. The right shows first the verdict on every line that applies —
 「도달 불가 · 링크 없음 N곳」 with the number of `broken` steps, 「판정 못 함 · 화면 없음」 when a screen is not on the map,
-「판정 못 함 · 주소 못 읽은 링크」 when a step is `unknown`, or 「도달 가능」 when none of these is so — then the source
-location of each condition, with 「링크 N개 중 하나」 over a step that several links reach, and says when a `conditioned`
-step was judged with such links left out.
+「판정 못 함 · 주소 못 읽은 링크」 when a step is `unknown`, or 「도달 가능」 when none of these is so — and says when a
+`conditioned` step was judged with such links left out, then under 「사전 조건」 the source location of each condition,
+with 「링크 N개 중 하나」 over a step that several links reach.
 Stories are read again whenever the page loads its data, so a story file written during the review shows after
 a reload.
 `/api/data` carries the checked stories as `stories.list` and the notes as `stories.notices`.
