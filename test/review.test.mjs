@@ -1238,7 +1238,17 @@ test('in a browser, the story list has a group of candidates, a chosen candidate
         assert.deepEqual(await p.locator('#right h2').allTextContents(), ['사전 조건', '받기', '버리기']);
         assert.equal(await p.inputValue('#accept-id'), 'open-help');
         assert.equal(await p.inputValue('#accept-name'), 'open-help');
+        assert.deepEqual(await p.locator('#right .story-form label > span:first-child').allTextContents(), ['ID', '이름', '까닭']);
         assert.equal(await p.textContent('#right button.accept'), '스토리로 받기');
+
+        assert.equal(await p.isVisible('label:has(#accept-id) .invalid'), false);
+        await p.fill('#accept-id', 'Open Help');
+        assert.equal(await p.isDisabled('#right button.accept'), true);
+        assert.equal(await p.textContent('label:has(#accept-id) .invalid'), '영문 소문자, 숫자, -, _ 만 쓸 수 있습니다.');
+        assert.equal(await p.isVisible('label:has(#accept-id) .invalid'), true);
+        await p.fill('#accept-id', 'open-help');
+        assert.equal(await p.isVisible('label:has(#accept-id) .invalid'), false);
+        assert.equal(await p.isDisabled('#right button.accept'), false);
 
         await p.fill('#accept-name', '');
         assert.equal(await p.isDisabled('#right button.accept'), true);
@@ -1399,6 +1409,7 @@ test('in a browser, a chosen story\'s name and memo can be changed on the right,
         assert.deepEqual(await p.locator('#right h2').allTextContents(), ['사전 조건', '이름 · 메모']);
         assert.equal(await p.inputValue('#story-name'), '실험실을 열어 결과를 본다');
         assert.equal(await p.inputValue('#story-memo'), '실험실은 고객사 설정에서 켜야 보인다.');
+        assert.deepEqual(await p.locator('#right .story-form label > span:first-child').allTextContents(), ['이름', '메모']);
         await p.fill('#story-name', '');
         assert.equal(await p.isDisabled('#right button.save-story'), true);
         await p.fill('#story-name', '실험실 결과를 본다');

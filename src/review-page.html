@@ -109,6 +109,9 @@
   .story-form button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
   .story-form button.discard { background: var(--panel); color: var(--fail); border-color: var(--fail); }
   .story-form button:disabled { opacity: .5; cursor: default; }
+  .story-form .field { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+  .story-form .field > span { font-size: 12px; color: var(--muted); }
+  .story-form .field .invalid { font-size: 12px; color: var(--fail); }
   .story-path .step .records { flex: none; font-size: 12px; }
   .history li { font-size: 12px; }
   .error { color: var(--fail); }
@@ -843,24 +846,31 @@ function storyProblems(st) {
   ].filter(Boolean);
 }
 
+const STORY_ID = /^[a-z0-9_-]+$/;
 const slugOf = (name) => name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
 const syncButton = (e, ready) => { e.target.closest('.story-form').querySelector('button').disabled = !ready(); };
 const storyForm = (...children) => h('fieldset', { class: 'story-form', disabled: state.storyWriting }, ...children);
+const field = (name, control, ...rest) => h('label', { class: 'field' }, h('span', {}, name), control, ...rest);
 const storyErrorLine = () => (state.storyError ? h('p', { class: 'error' }, state.storyError) : null);
 
 function candidateActions(c) {
   const d = (state.candidateDraft ??= { id: slugOf(c.name), name: c.name, reason: '' });
-  const canAccept = () => Boolean(d.id.trim() && d.name.trim());
+  const badId = () => Boolean(d.id) && !STORY_ID.test(d.id);
+  const canAccept = () => STORY_ID.test(d.id) && Boolean(d.name.trim());
   const canDiscard = () => Boolean(d.reason.trim());
   return [
     h('h2', {}, '받기'),
     storyForm(
-      h('input', { type: 'text', id: 'accept-id', value: d.id, placeholder: 'ID', title: '영문 소문자 · 숫자 · - · _ 로 씁니다. 스토리 파일 이름이 됩니다.', oninput: (e) => { d.id = e.target.value; syncButton(e, canAccept); } }),
-      h('input', { type: 'text', id: 'accept-name', value: d.name, placeholder: '이름', oninput: (e) => { d.name = e.target.value; syncButton(e, canAccept); } }),
+      field('ID', h('input', { type: 'text', id: 'accept-id', value: d.id, oninput: (e) => {
+        d.id = e.target.value;
+        e.target.nextElementSibling.hidden = !badId();
+        syncButton(e, canAccept);
+      } }), h('small', { class: 'invalid', hidden: !badId() }, '영문 소문자, 숫자, -, _ 만 쓸 수 있습니다.')),
+      field('이름', h('input', { type: 'text', id: 'accept-name', value: d.name, oninput: (e) => { d.name = e.target.value; syncButton(e, canAccept); } })),
       h('button', { class: 'accept', disabled: !canAccept(), title: '이 화면 순서로 스토리 파일을 씁니다.', onclick: acceptChosen }, '스토리로 받기')),
     h('h2', {}, '버리기'),
     storyForm(
-      h('input', { type: 'text', id: 'discard-reason', value: d.reason, placeholder: '까닭', oninput: (e) => { d.reason = e.target.value; syncButton(e, canDiscard); } }),
+      field('까닭', h('input', { type: 'text', id: 'discard-reason', value: d.reason, oninput: (e) => { d.reason = e.target.value; syncButton(e, canDiscard); } })),
       h('button', { class: 'discard', disabled: !canDiscard(), title: '버린 후보 파일을 남기고, 같은 화면 순서는 다시 후보로 내지 않습니다.', onclick: discardChosen }, '버리기')),
     storyErrorLine(),
   ];
@@ -873,8 +883,8 @@ function storyEdit(st) {
   return [
     h('h2', {}, '이름 · 메모'),
     storyForm(
-      h('input', { type: 'text', id: 'story-name', value: d.name, placeholder: '이름', oninput: (e) => { d.name = e.target.value; syncButton(e, canSave); } }),
-      h('textarea', { id: 'story-memo', placeholder: '메모', oninput: (e) => { d.memo = e.target.value; } }, d.memo),
+      field('이름', h('input', { type: 'text', id: 'story-name', value: d.name, oninput: (e) => { d.name = e.target.value; syncButton(e, canSave); } })),
+      field('메모', h('textarea', { id: 'story-memo', oninput: (e) => { d.memo = e.target.value; } }, d.memo)),
       h('button', { class: 'save-story', disabled: !canSave(), title: '스토리 파일의 이름과 메모를 고쳐 씁니다.', onclick: saveStoryEdit }, '저장')),
     storyErrorLine(),
   ];
@@ -911,7 +921,7 @@ async function acceptChosen() {
   const c = candidateOf();
   const author = authorOrAsk();
   if (!c || !author) return;
-  const id = state.candidateDraft.id.trim();
+  const { id } = state.candidateDraft;
   if (!(await writeStories('/api/candidates/accept', { record: c.source.record, id, name: state.candidateDraft.name, author }))) return;
   state.candidate = null;
   state.candidateDraft = null;
