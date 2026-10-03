@@ -338,13 +338,36 @@ test('a link with no setting guard of its own carries the settings its restricte
   assert.deepEqual(needPaths(loopListedFirst['/b'].settings), [['/a', ['MENU.X']]]);
 });
 
-test('a restricted origin passes on only the settings every way into it needs', () => {
-  const access = settingAccess([
+test('a link that carries its origin\'s settings is marked as inherited, and says so when the ways into the origin need different settings', () => {
+  const even = settingAccess([
+    ['/start', [], [['/a', [MENU_X]], ['/a', [MENU_X]]]],
+    ['/a', [], [['/b', []]]],
+    ['/b', [], []],
+  ]);
+  assert.deepEqual(even['/b'].settings.map((x) => [x.inherited, x.unreadable]), [[true, []]]);
+
+  const uneven = settingAccess([
     ['/start', [], [['/a', [MENU_X, MENU_Y]], ['/a', [MENU_X]]]],
     ['/a', [], [['/b', []]]],
     ['/b', [], []],
   ]);
-  assert.deepEqual(needPaths(access['/b'].settings), [['/a', ['MENU.X']]]);
+  assert.deepEqual(needPaths(uneven['/b'].settings), [['/a', ['MENU.X']]]);
+  assert.deepEqual(uneven['/b'].settings[0].unreadable, [{ guard: '/a', reason: '출발 화면으로 들어가는 길마다 필요한 설정이 다릅니다' }]);
+});
+
+test('an unreadable setting guard on one of several ways into a restricted origin is not passed on', () => {
+  const config = { routesFile: 'Routes.js', entryPaths: [], roleIdentifiers: ['memberRole'], settingsRoots: ['globalSettings'] };
+  const U = 'globalSettings.MENU.U';
+  const screens = [
+    ['/start', [], [['/a', [MENU_X]], ['/a', [MENU_X, U]]]],
+    ['/a', [], [['/b', []]]],
+    ['/b', [], [['/c', []]]],
+    ['/c', [], []],
+  ].map(([path, routeGuards, links]) => ({ id: path, path, routeGuards, links: links.map(([to, guards], line) => ({ to, guards, file: `${path}.js`, line })) }));
+  const guards = new Map([[MENU_X, { settings: [setting('MENU.X', 'on')] }], [U, { settings: null, reason: '읽지 못함' }]]);
+  const guardSettings = new Map(['Routes.js', ...screens.map((s) => `${s.path}.js`)].map((f) => [f, guards]));
+  const { access } = screenAccess(screens, [], config, new Map(), {}, guardSettings);
+  for (const i of [2, 3]) assert.deepEqual(access[i].settings.map((x) => [x.needs.map((n) => n.path.join('.')), x.unreadable]), [[['MENU.X'], []]]);
 });
 
 test('two restricted screens that link to each other keep the kind of the only link into them from outside', () => {
@@ -387,7 +410,7 @@ test('each restricted screen keeps the route guard and the links that decided it
     kinds: ['setting'],
     route: [],
     links: [{ from: '/lab#Lab', file: 'components/Lab.js', line: 14, guards: [], fromKinds: ['setting'] }],
-    settings: [{ from: '/lab#Lab', file: 'components/Lab.js', line: 14, needs: [setting('SYSTEM.LAB_ENABLED', 'on', { default: false })], unreadable: [] }],
+    settings: [{ from: '/lab#Lab', file: 'components/Lab.js', line: 14, inherited: true, needs: [setting('SYSTEM.LAB_ENABLED', 'on', { default: false })], unreadable: [] }],
   });
 });
 

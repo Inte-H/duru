@@ -447,7 +447,7 @@ const samePlace = (o, path, item) => o.path.join('.') === path.join('.') && o.it
 const overrideIn = (list, path, item) => list.find((o) => samePlace(o, path, item));
 const overrides = () => state.data.app?.settings?.overrides ?? [];
 const quoted = (v) => JSON.stringify(v);
-const sourceLabel = (from) => (from === 'route' ? '라우트' : `${from} 에서 오는 링크`);
+const sourceLabel = (source) => (source.from === 'route' ? '라우트' : source.inherited ? `${source.from} 에서 물려받음` : `${source.from} 에서 오는 링크`);
 const valueAt = (v, keys) => keys.reduce((o, k) => (o !== null && typeof o === 'object' ? o[k] : undefined), v);
 
 function fileDefines(section, key) {
@@ -547,7 +547,7 @@ function settingRows(s) {
       const key = quoted([n.root, n.path, kind, kind === 'includes' ? n.value : null]);
       if (!rows.has(key)) rows.set(key, { needs: [], from: new Set() });
       rows.get(key).needs.push(n);
-      rows.get(key).from.add(sourceLabel(source.from));
+      rows.get(key).from.add(sourceLabel(source));
     }
   }
   return [...rows.values()];
@@ -606,14 +606,14 @@ function renderSettingsBar() {
   if (!bar || !s) return;
   const list = overrides();
   const rows = settingRows(s);
-  const unreadable = (s.access.settings ?? []).flatMap((x) => x.unreadable.map((u) => ({ ...u, from: x.from })));
+  const unreadable = (s.access.settings ?? []).flatMap((x) => x.unreadable.map((u) => ({ ...u, source: x })));
   const others = list.filter((o) => !rows.some((r) => samePlace(o, r.needs[0].path, r.needs[0].need === 'includes' ? r.needs[0].value : undefined)));
   bar.hidden = !rows.length && !unreadable.length && !list.length && !state.settingsError;
   bar.classList.toggle('overridden', list.length > 0);
   fill(bar,
     h('span', { class: 'title' }, list.length ? `설정 ${list.length}개 바꿈` : '설정'),
     rows.map((r) => settingControl(r, list)),
-    unreadable.map((u) => h('span', { class: 'setting blocked', title: sourceLabel(u.from) }, h('code', {}, u.guard), h('span', { class: 'reason' }, u.reason))),
+    unreadable.map((u) => h('span', { class: 'setting blocked', title: sourceLabel(u.source) }, h('code', {}, u.guard), h('span', { class: 'reason' }, u.reason))),
     others.length ? h('span', { class: 'others' }, '다른 화면에서 바꾼 설정 ', others.map((o) => h('span', { class: 'setting changed' }, h('code', {}, overrideText(o))))) : null,
     list.length ? h('button', { class: 'reset', onclick: () => updateSettings(() => []) }, '기본값으로') : null,
     state.data.app.settings?.fileError ? h('span', { class: 'file-error' }, state.data.app.settings.fileError) : null,

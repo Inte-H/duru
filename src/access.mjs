@@ -187,6 +187,7 @@ function settingsOf(guardSettings, guard, file) {
   return read?.settings ? { settings: read.settings } : { settings: null, settingsReason: read?.reason ?? NO_SETTING_READ };
 }
 
+const UNEVEN_WAYS = '출발 화면으로 들어가는 길마다 필요한 설정이 다릅니다';
 const distinct = (list) => [...new Map(list.map((x) => [JSON.stringify(x), x])).values()];
 
 function settingParts(guards) {
@@ -200,12 +201,25 @@ function settingParts(guards) {
 
 function settingSources(route, links) {
   const sources = [];
-  const add = (from, { guarded, needs, unreadable }) => {
-    if (guarded || needs.length || unreadable.length) sources.push({ ...from, needs, unreadable });
+  const add = (from, { guarded, inherited, needs, unreadable }) => {
+    if (guarded || needs.length || unreadable.length) sources.push({ ...from, ...(inherited ? { inherited } : {}), needs, unreadable });
   };
   add({ from: 'route' }, settingParts(route));
   for (const l of links) add({ from: l.from, file: l.file, line: l.line }, l.settings);
   return sources;
+}
+
+// 서로 링크를 건 화면끼리 값이 계속 바뀌지 않도록 도는 횟수를 화면 수로 막는다.
+function settle(targets, values, compute) {
+  for (let changed = true, round = 0; changed && round <= targets.length; round += 1) {
+    changed = false;
+    for (const i of targets) {
+      const v = compute(i);
+      if (JSON.stringify(v) === JSON.stringify(values[i])) continue;
+      values[i] = v;
+      changed = true;
+    }
+  }
 }
 
 export function screenAccess(screens, redirects, config, guardInits, constants, guardSettings) {
@@ -319,17 +333,7 @@ export function screenAccess(screens, redirects, config, guardInits, constants, 
     const both = sets.length ? intersect(sets) : new Set();
     return both.size ? [...both].sort() : null;
   };
-  const roleScreens = indices.filter((i) => restricted[i] && kinds[i].has('role'));
-  // 역할을 묻는 화면끼리 링크가 돌 때 값이 계속 바뀌지 않도록 도는 횟수를 화면 수로 막는다.
-  for (let changed = true, round = 0; changed && round <= roleScreens.length; round += 1) {
-    changed = false;
-    for (const i of roleScreens) {
-      const v = valuesOf(i);
-      if (JSON.stringify(v) === JSON.stringify(values[i])) continue;
-      values[i] = v;
-      changed = true;
-    }
-  }
+  settle(indices.filter((i) => restricted[i] && kinds[i].has('role')), values, valuesOf);
   const roleAccess = (i) => {
     if (!restricted[i] || !kinds[i].has('role')) return {};
     const guards = [...route[i], ...(onlyBlockedLinks(i) ? incoming[i].flatMap((l) => l.guards) : [])];
@@ -342,26 +346,27 @@ export function screenAccess(screens, redirects, config, guardInits, constants, 
   const linkSettings = (l) => {
     const own = settingParts(l.guards);
     if (own.guarded || !restricted[l.from] || !kinds[l.from].has('setting')) return own;
-    return required[l.from] && { guarded: false, ...required[l.from] };
+    const origin = required[l.from];
+    if (!origin) return null;
+    const unreadable = origin.uneven ? [...origin.unreadable, { guard: screens[l.from].id, reason: UNEVEN_WAYS }] : origin.unreadable;
+    return { guarded: false, inherited: true, needs: origin.needs, unreadable };
   };
   // 들어오는 길의 값을 하나도 모르면 null 로 두어, 서로 링크를 건 화면끼리 빈 값을 주고받지 않게 한다.
+  // 읽지 못한 조건은 모든 길에 있을 때만 남긴다. 읽을 수 있는 길로 들어갈 수 있기 때문이다.
   const requiredOf = (i) => {
     const own = settingParts(route[i]);
-    const ways = onlyBlockedLinks(i) ? incoming[i].map(linkSettings).filter(Boolean) : [];
-    if (onlyBlockedLinks(i) && !ways.length) return null;
-    const common = ways.length ? ways[0].needs.filter((n) => ways.every((w) => w.needs.some((m) => JSON.stringify(m) === JSON.stringify(n)))) : [];
-    return { needs: distinct([...own.needs, ...common]), unreadable: distinct([...own.unreadable, ...ways.flatMap((w) => w.unreadable)]) };
+    if (!onlyBlockedLinks(i)) return { needs: own.needs, unreadable: own.unreadable, uneven: false };
+    const ways = incoming[i].map(linkSettings).filter(Boolean);
+    if (!ways.length) return null;
+    const keys = ways.map((w) => new Set(w.needs.map((n) => JSON.stringify(n))));
+    const common = intersect(keys);
+    return {
+      needs: distinct([...own.needs, ...ways[0].needs.filter((n) => common.has(JSON.stringify(n)))]),
+      unreadable: distinct([...own.unreadable, ...(ways.every((w) => w.unreadable.length) ? ways.flatMap((w) => w.unreadable) : [])]),
+      uneven: keys.some((k) => k.size !== common.size),
+    };
   };
-  const settingScreens = indices.filter((i) => restricted[i] && kinds[i].has('setting'));
-  for (let changed = true, round = 0; changed && round <= settingScreens.length; round += 1) {
-    changed = false;
-    for (const i of settingScreens) {
-      const v = requiredOf(i);
-      if (JSON.stringify(v) === JSON.stringify(required[i])) continue;
-      required[i] = v;
-      changed = true;
-    }
-  }
+  settle(indices.filter((i) => restricted[i] && kinds[i].has('setting')), required, requiredOf);
 
   const byPlace = (a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line);
   const shownKinds = indices.map((i) => (restricted[i] ? [...kinds[i]].sort() : []));
@@ -370,8 +375,8 @@ export function screenAccess(screens, redirects, config, guardInits, constants, 
       .map((l) => ({ link: l, row: { from: screens[l.from].id, file: l.file, line: l.line, guards: l.guards, fromKinds: shownKinds[l.from] } }))
       .sort((a, b) => byPlace(a.row, b.row));
     const links = ways.map((w) => w.row);
-    const settingWays = onlyBlockedLinks(i) ? ways.map((w) => ({ ...w.row, settings: linkSettings(w.link) ?? settingParts(w.link.guards) })) : [];
-    const settings = shownKinds[i].includes('setting') ? { settings: settingSources(route[i], settingWays) } : {};
+    const settingWays = () => (onlyBlockedLinks(i) ? ways.map((w) => ({ ...w.row, settings: linkSettings(w.link) ?? settingParts(w.link.guards) })) : []);
+    const settings = shownKinds[i].includes('setting') ? { settings: settingSources(route[i], settingWays()) } : {};
     return { restricted: restricted[i], kinds: shownKinds[i], route: route[i], links, ...roleAccess(i), ...settings };
   });
   const entries = starts.map((i) => ({ screen: screens[i].id, reasons: reasons[i] }));

@@ -2091,6 +2091,10 @@ test('in a browser, choosing a screen behind a setting opens the frame with the 
             assert.deepEqual(await overridesOf(base), []);
             assert.equal(await bar.isHidden(), true);
             assert.ok(requests.every((r) => !r.includes('settings')));
+
+            await chooseScreen(p, '/lab/result');
+            await frame.locator('#lab:has-text("true")').waitFor();
+            assert.equal(await settingRow(p, 'SYSTEM.LAB_ENABLED').getAttribute('title'), '/lab#Lab 에서 물려받음');
           }),
         ),
       ),
