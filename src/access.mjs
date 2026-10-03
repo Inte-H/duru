@@ -187,17 +187,24 @@ function settingsOf(guardSettings, guard, file) {
   return read?.settings ? { settings: read.settings } : { settings: null, settingsReason: read?.reason ?? NO_SETTING_READ };
 }
 
+const distinct = (list) => [...new Map(list.map((x) => [JSON.stringify(x), x])).values()];
+
+function settingParts(guards) {
+  const setting = guards.filter((g) => g.kinds.includes('setting'));
+  return {
+    guarded: setting.length > 0,
+    needs: distinct(setting.flatMap((g) => g.settings ?? [])),
+    unreadable: setting.filter((g) => !g.settings).map((g) => ({ guard: g.guard, reason: g.settingsReason })),
+  };
+}
+
 function settingSources(route, links) {
   const sources = [];
-  const add = (from, guards) => {
-    const setting = guards.filter((g) => g.kinds.includes('setting'));
-    if (!setting.length) return;
-    const needs = [...new Map(setting.flatMap((g) => g.settings ?? []).map((n) => [JSON.stringify(n), n])).values()];
-    const unreadable = setting.filter((g) => !g.settings).map((g) => ({ guard: g.guard, reason: g.settingsReason }));
-    sources.push({ ...from, needs, unreadable });
+  const add = (from, { guarded, needs, unreadable }) => {
+    if (guarded || needs.length || unreadable.length) sources.push({ ...from, needs, unreadable });
   };
-  add({ from: 'route' }, route);
-  for (const l of links) add({ from: l.from, file: l.file, line: l.line }, l.guards);
+  add({ from: 'route' }, settingParts(route));
+  for (const l of links) add({ from: l.from, file: l.file, line: l.line }, l.settings);
   return sources;
 }
 
@@ -330,13 +337,41 @@ export function screenAccess(screens, redirects, config, guardInits, constants, 
     return { roleValues: values[i], unreadableRoleGuards: [...new Set(unreadable)].sort() };
   };
 
+  const required = screens.map(() => null);
+  // 설정 조건이 없는 링크는 접근이 막힌 출발 화면이 꼭 요구하는 설정을 건다. 출발 화면의 값을 아직 모르면 null 이다.
+  const linkSettings = (l) => {
+    const own = settingParts(l.guards);
+    if (own.guarded || !restricted[l.from] || !kinds[l.from].has('setting')) return own;
+    return required[l.from] && { guarded: false, ...required[l.from] };
+  };
+  // 들어오는 길의 값을 하나도 모르면 null 로 두어, 서로 링크를 건 화면끼리 빈 값을 주고받지 않게 한다.
+  const requiredOf = (i) => {
+    const own = settingParts(route[i]);
+    const ways = onlyBlockedLinks(i) ? incoming[i].map(linkSettings).filter(Boolean) : [];
+    if (onlyBlockedLinks(i) && !ways.length) return null;
+    const common = ways.length ? ways[0].needs.filter((n) => ways.every((w) => w.needs.some((m) => JSON.stringify(m) === JSON.stringify(n)))) : [];
+    return { needs: distinct([...own.needs, ...common]), unreadable: distinct([...own.unreadable, ...ways.flatMap((w) => w.unreadable)]) };
+  };
+  const settingScreens = indices.filter((i) => restricted[i] && kinds[i].has('setting'));
+  for (let changed = true, round = 0; changed && round <= settingScreens.length; round += 1) {
+    changed = false;
+    for (const i of settingScreens) {
+      const v = requiredOf(i);
+      if (JSON.stringify(v) === JSON.stringify(required[i])) continue;
+      required[i] = v;
+      changed = true;
+    }
+  }
+
   const byPlace = (a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line);
   const shownKinds = indices.map((i) => (restricted[i] ? [...kinds[i]].sort() : []));
   const access = screens.map((_, i) => {
-    const links = incoming[i]
-      .map((l) => ({ from: screens[l.from].id, file: l.file, line: l.line, guards: l.guards, fromKinds: shownKinds[l.from] }))
-      .sort(byPlace);
-    const settings = shownKinds[i].includes('setting') ? { settings: settingSources(route[i], onlyBlockedLinks(i) ? links : []) } : {};
+    const ways = incoming[i]
+      .map((l) => ({ link: l, row: { from: screens[l.from].id, file: l.file, line: l.line, guards: l.guards, fromKinds: shownKinds[l.from] } }))
+      .sort((a, b) => byPlace(a.row, b.row));
+    const links = ways.map((w) => w.row);
+    const settingWays = onlyBlockedLinks(i) ? ways.map((w) => ({ ...w.row, settings: linkSettings(w.link) ?? settingParts(w.link.guards) })) : [];
+    const settings = shownKinds[i].includes('setting') ? { settings: settingSources(route[i], settingWays) } : {};
     return { restricted: restricted[i], kinds: shownKinds[i], route: route[i], links, ...roleAccess(i), ...settings };
   });
   const entries = starts.map((i) => ({ screen: screens[i].id, reasons: reasons[i] }));

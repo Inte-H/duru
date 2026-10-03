@@ -299,6 +299,54 @@ test('an entry screen needs only what its route guards ask, whatever the links i
   assert.deepEqual(bySetting['/y'].settings.map((x) => x.from), ['route']);
 });
 
+const MENU_Y = 'globalSettings.MENU.Y';
+const settingAccess = (screens) => {
+  const config = { routesFile: 'Routes.js', entryPaths: [], roleIdentifiers: ['memberRole'], settingsRoots: ['globalSettings'] };
+  const full = screens.map(([path, routeGuards, links]) => ({ id: path, path, routeGuards, links: links.map(([to, guards], line) => ({ to, guards, file: `${path}.js`, line })) }));
+  const read = (guard) => [guard, { settings: [setting(guard.replace('globalSettings.', ''), 'on')] }];
+  const guards = new Map([MENU_X, MENU_Y].map(read));
+  const guardSettings = new Map(['Routes.js', ...full.map((s) => `${s.path}.js`)].map((f) => [f, guards]));
+  const { access } = screenAccess(full, [], config, new Map(), {}, guardSettings);
+  return Object.fromEntries(full.map((s, i) => [s.id, access[i]]));
+};
+const needPaths = (sources) => sources.map((x) => [x.from, x.needs.map((n) => n.path.join('.'))]);
+
+test('a link with no setting guard of its own carries the settings its restricted origin needs, along a chain and around a loop, and a guarded link keeps its own', () => {
+  const chain = settingAccess([
+    ['/start', [], [['/a', [MENU_X]]]],
+    ['/a', [], [['/b', []]]],
+    ['/b', [], [['/c', [MENU_Y]]]],
+    ['/c', [], []],
+  ]);
+  assert.deepEqual(needPaths(chain['/b'].settings), [['/a', ['MENU.X']]]);
+  assert.deepEqual(needPaths(chain['/c'].settings), [['/b', ['MENU.Y']]]);
+
+  const loop = settingAccess([
+    ['/start', [], [['/a', [MENU_X]]]],
+    ['/a', [], [['/b', []]]],
+    ['/b', [], [['/a', []]]],
+  ]);
+  assert.deepEqual(needPaths(loop['/a'].settings), [['/b', ['MENU.X']], ['/start', ['MENU.X']]]);
+  assert.deepEqual(needPaths(loop['/b'].settings), [['/a', ['MENU.X']]]);
+
+  const loopListedFirst = settingAccess([
+    ['/start', [], [['/a', [MENU_X]]]],
+    ['/b', [], [['/a', []]]],
+    ['/a', [], [['/b', []]]],
+  ]);
+  assert.deepEqual(needPaths(loopListedFirst['/a'].settings), [['/b', ['MENU.X']], ['/start', ['MENU.X']]]);
+  assert.deepEqual(needPaths(loopListedFirst['/b'].settings), [['/a', ['MENU.X']]]);
+});
+
+test('a restricted origin passes on only the settings every way into it needs', () => {
+  const access = settingAccess([
+    ['/start', [], [['/a', [MENU_X, MENU_Y]], ['/a', [MENU_X]]]],
+    ['/a', [], [['/b', []]]],
+    ['/b', [], []],
+  ]);
+  assert.deepEqual(needPaths(access['/b'].settings), [['/a', ['MENU.X']]]);
+});
+
 test('two restricted screens that link to each other keep the kind of the only link into them from outside', () => {
   const access = tinyAccess([
     ['/start', [], [['/a', [MENU_X]]]],
@@ -339,7 +387,7 @@ test('each restricted screen keeps the route guard and the links that decided it
     kinds: ['setting'],
     route: [],
     links: [{ from: '/lab#Lab', file: 'components/Lab.js', line: 14, guards: [], fromKinds: ['setting'] }],
-    settings: [],
+    settings: [{ from: '/lab#Lab', file: 'components/Lab.js', line: 14, needs: [setting('SYSTEM.LAB_ENABLED', 'on', { default: false })], unreadable: [] }],
   });
 });
 

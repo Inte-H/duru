@@ -264,7 +264,9 @@ known. Any other form (a function call, `!==`, `||`, a comparison with a non-lit
 `&&`) gives `settings: null` and a Korean `settingsReason`. A screen whose `kinds` include `setting` also has
 `access.settings`: one entry for its route guards (`from: "route"`) and, when its links count as above, one per
 link into it that carries a setting guard (`from` the screen, `file`, `line`), each with the `needs` of its readable guards and the
-`unreadable` guards with their `reason`. The evaluated `settingsDefaults` are written to `map.json` too, with
+`unreadable` guards with their `reason`. A link with no setting guard of its own from a screen whose `kinds` include `setting`
+gets an entry too, with what that screen needs on every way into it, so a screen reached only through such links still shows
+its setting values. The evaluated `settingsDefaults` are written to `map.json` too, with
 `settingsDefaultsIncomplete`, which lists per root the places the source does not show in full: `[section,
 key]` for a key whose value holds something duru cannot read (such as `window.X || [...]`, a call, a spread,
 a computed key, or a constant that is not configured), `[section]` for a section whose keys cannot all be

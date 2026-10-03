@@ -1062,7 +1062,9 @@ test('in a browser, the setting and role filters keep the screens that open only
         await p.click('#view-flow');
         await p.waitForSelector('#flow .box');
         assert.doesNotMatch(await (await screenBox(p, '/admin/report#AdminReport')).locator('.l2').textContent(), /필요/);
-        assert.match(await (await screenBox(p, '/lab/result#LabResult')).locator('.l2').textContent(), / · 설정 필요$/);
+        const labResult = await screenBox(p, '/lab/result#LabResult');
+        assert.doesNotMatch(await labResult.locator('.l2').textContent(), /필요/);
+        assert.deepEqual(await needLines(labResult), ['설정 SYSTEM.LAB_ENABLED 켬']);
         assert.doesNotMatch(await (await screenBox(p, '/signin#SignIn')).locator('.l2').textContent(), /필요/);
       }),
     ),
