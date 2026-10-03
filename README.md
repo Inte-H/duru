@@ -537,8 +537,9 @@ a reload.
 Below the stories, 「후보 N」 lists the story candidates the same way, with the record each came from, and
 「건너뛴 파일 N」 the visit records and discarded candidate files that could not be read. Choosing a candidate
 shows it in the middle like a story, with its record and steps (「단계 1–21」) under its name and, next to each
-screen, the record steps it covers. The right holds 「받기」, with an ID (the name turned into an ID to start
-with) and a name for 「스토리로 받기」, then 「버리기」 with a reason, then 「사전 조건」. An accepted candidate
+screen, the record steps it covers. The right holds the verdict and 「사전 조건」 as for a story, then 「받기」,
+with an ID (the name turned into an ID to start with) and a name for 「스토리로 받기」, then 「버리기」 with a
+reason. An accepted candidate
 moves to the story list, chosen; after a discard the next candidate is chosen. For a story, the right shows
 「이름 · 메모」 below 「사전 조건」, and 「저장」 rewrites the name and memo in the story file, leaving its
 other keys as they were. The author is the same as for marks.

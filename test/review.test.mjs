@@ -1234,7 +1234,8 @@ test('in a browser, the story list has a group of candidates, a chosen candidate
         assert.equal(await p.textContent('#center .story-path .step.off-map .mono'), '/beta/inbox');
         assert.deepEqual(await p.locator('#center .story-path .link > .chip').allTextContents(), ['이어짐', '판정 못 함', '판정 못 함']);
         assert.deepEqual(await p.locator('#right .verdict').allTextContents(), ['판정 못 함 · 화면 없음']);
-        assert.deepEqual(await p.locator('#right h2').allTextContents(), ['받기', '버리기', '사전 조건']);
+        assert.deepEqual(await p.locator('#right > *').evaluateAll((els) => els.slice(0, 2).map((e) => e.textContent)), ['판정 못 함 · 화면 없음', '사전 조건']);
+        assert.deepEqual(await p.locator('#right h2').allTextContents(), ['사전 조건', '받기', '버리기']);
         assert.equal(await p.inputValue('#accept-id'), 'open-help');
         assert.equal(await p.inputValue('#accept-name'), 'open-help');
         assert.equal(await p.textContent('#right button.accept'), '스토리로 받기');

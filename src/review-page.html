@@ -953,7 +953,7 @@ function reachSection(st) {
 function renderStoryRight() {
   const right = document.getElementById('right');
   const c = candidateOf();
-  if (c) return fill(right, ...candidateActions(c), ...reachSection(c));
+  if (c) return fill(right, ...reachSection(c), ...candidateActions(c));
   const st = storyOf();
   if (!st) return fill(right);
   fill(right, ...reachSection(st), ...storyEdit(st));
