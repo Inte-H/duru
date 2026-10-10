@@ -14,6 +14,7 @@ import { parseSource } from './parse.ts';
 import { pathParts, routePattern } from './path-values.ts';
 import { importResolver } from './resolve.ts';
 import { screenRequestReader } from './screen-requests.ts';
+import { typedMembers } from './typed-members.ts';
 import { settingNeeds } from './setting-needs.ts';
 import { addCallDefaults, findSettingsCalls, settingsResultFinder } from './settings-functions.ts';
 
@@ -684,7 +685,8 @@ export async function extractClient(config: any) {
     return parsed.get(file)!;
   };
   const siteStart = new WeakMap<Site, number>();
-  const follower = nameFollower({ parse, resolve: imports.resolve, sitesOf: (file) => fileFacts(file).apiCalls.map((site) => ({ start: siteStart.get(site)!, site })) });
+  const sitesOf = (file: string) => fileFacts(file).apiCalls.map((site) => ({ start: siteStart.get(site)!, site }));
+  const follower = nameFollower({ parse, resolve: imports.resolve, sitesOf });
   const origins = new Map<string, Origin | null>();
   const calledOrigin = (file: string | null | undefined, name: string) => {
     const key = `${file}\0${name}`;
@@ -1031,15 +1033,30 @@ export async function extractClient(config: any) {
   // POST 가 아닌 페이지 이동의 주소가 앱의 라우트와 맞으면 서버가 아니라 앱의 다른 화면이 열린다. 고정 문자열 부분이 없는 라우트는 어떤 주소에나 맞으므로 견주지 않는다.
   const screenRoutes = extracted.filter((s) => !s.path.includes(UNKNOWN) && pathParts(s.path).some((part) => typeof part === 'string' && /[^/]/.test(part))).map((s) => routePattern(s.path));
   const opensScreen = (url: string) => screenRoutes.some((route) => route.test(url.replaceAll(UNKNOWN, '\0').split(/[?#]/)[0]));
-  const screens = extracted.map(({ wrapperFiles, ...s }) => {
+  const sourced = extracted.map(({ wrapperFiles, ...s }) => {
     const entryFiles = [s.componentFile, ...wrapperFiles].filter(Boolean) as string[];
     const isOtherScreen = (f: string) => screenFiles.has(f) && !entryFiles.includes(f);
-    const files = [...new Set(entryFiles.flatMap((f) => closureOf(f, isOtherScreen)))];
+    return { s, entryFiles, isOtherScreen, files: [...new Set(entryFiles.flatMap((f) => closureOf(f, isOtherScreen)))] };
+  });
+  const members = typedMembers(config.tsconfig, [...new Set(sourced.flatMap((x) => x.files))], imports.resolve);
+  const screenFollower = members ? nameFollower({ parse, resolve: imports.resolve, sitesOf, members }) : follower;
+  const screens = sourced.map(({ s, entryFiles, isOtherScreen, files }) => {
     const inSources = new Set<string | null>(files);
+    // 화면이 import 하지 않고 context 훅에서 받은 스토어를 거쳐서만 닿는 파일. 화면의 소스는 아니지만, 화면이 호출한 스토어 메서드를 추적할 때 들어간다.
+    const received = new Set<string>();
+    const canEnter = (f: string | null) => inSources.has(f) || received.has(f!);
+    const loaded = (f: string) => inSources.has(f);
     const starts = entryFiles.map((file) => ({ file, name: null }));
-    const reached = follower.reach(starts, (f) => inSources.has(f));
+    let reached: Set<ApiCallSite>;
+    for (;;) {
+      const missed = new Set<string>();
+      reached = screenFollower.reach(starts, canEnter, { missed, loaded });
+      const more = [...missed].flatMap((f) => closureOf(f, isOtherScreen)).filter((f) => !canEnter(f));
+      if (!more.length) break;
+      for (const f of more) received.add(f);
+    }
     // 요청 함수의 파일을 거쳐야만 이어지는 요청은 그 함수가 받은 주소로 보내는 것이라, 화면 코드에서 나가는 요청이 아니다.
-    const outsideRequestFunction = inSources.has(requestFile) ? follower.reach(starts, (f) => inSources.has(f) && f !== requestFile) : reached;
+    const outsideRequestFunction = canEnter(requestFile) ? screenFollower.reach(starts, (f) => canEnter(f) && f !== requestFile, { loaded }) : reached;
     const sends = (c: ApiCallSite) => !c.request || (outsideRequestFunction.has(c) && !(c.navigation && c.request.method !== 'POST' && opensScreen(c.request.url!)));
     const apiCalls: (ApiCallSite & { file: string | null })[] = [];
     const settingReads: (SettingRead & { file: string | null })[] = [];
@@ -1053,6 +1070,7 @@ export async function extractClient(config: any) {
         links.push(typeof value === 'string' && tail ? { ...r, to: value + tail, tail, file: rel(f) } : { ...r, to: value ?? UNKNOWN, file: rel(f) });
       }
     }
+    for (const f of received) for (const c of fileFacts(f).apiCalls) if (reached.has(c) && sends(c)) apiCalls.push({ ...c, file: rel(f) });
     return { ...s, componentFile: rel(s.componentFile), closureSize: files.length, sourceFiles: files.map(rel).sort(), apiCalls, settingReads, links };
   });
 
