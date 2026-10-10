@@ -150,6 +150,12 @@ client with example results and a config to start from.
   `{?}`. A form that posts is read the same way. Any other move of the browser written in a screen source is a
   call only when the config shows that its path goes to the server: the server list holds the path, or the path
   starts with one of `app.apiPaths`. An address on another host is read only when that host is `app.server`.
+
+  A request sent by a method of a store the screens get from a React context hook, such as a MobX store from
+  `useStores()`, is a call of the screens that call that method. duru reads which method is called from the
+  TypeScript types of the source, with the options of `tsconfig` when the config names one. A screen that gets the
+  store only from the hook gets those calls too, though the store files are not in its `sourceFiles` and their
+  setting reads and links are not on the screen.
 - `sourcePackages` — packages of the same repository whose source duru reads like the app's own (optional),
   each package name with its source folder as a path from the config file. An import of a package that is not
   listed here runs as a value that does nothing, as an outside package does. For a client whose API class lives in
@@ -289,7 +295,9 @@ client with example results and a config to start from.
 usable as a test tag. It lists its route file and line, its component file, its `sourceFiles`, the API calls it
 reaches, the settings it reads, and its links to other screens with the conditions guarding them. The settings
 and links come from every file in `sourceFiles`. The API calls are only those the screen's code reaches, so a file
-in `sourceFiles` can hold calls the screen does not list; each call names the file and line where it is written.
+in `sourceFiles` can hold calls the screen does not list, and a call sent by a method of a store the screen gets
+from a React context hook can be written in a file outside them; each call names the file and line where it is
+written.
 A layout with a side menu around a group of routes gives its calls, settings reads and links to every screen
 inside it.
 
