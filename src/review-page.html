@@ -562,7 +562,7 @@ const STORY_FILTERS = [
   ...['untested', 'partial', 'fail'].map((key) => ({ key, ...STORY_STATUS[key], status: true, keep: (st) => st.status === key })),
   { key: 'broken', label: '링크 없음', title: '이웃한 두 화면을 잇는 링크가 맵에 없는 자리가 있는 스토리', keep: (st) => st.broken },
 ];
-const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null, ordering: null, orderRefused: null };
+const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null };
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -691,7 +691,6 @@ function setSelected(id, target = { node: id }) {
   state.selected = id;
   state.target = target;
   state.draft = null;
-  dropOrdering();
   state.error = null;
   state.judgmentError = null;
 }
@@ -3272,37 +3271,33 @@ function orderChip(order, remove, dropStep) {
     h('button', { type: 'button', title: '꼬리표 빼기', 'aria-label': '화면 순서 꼬리표 빼기', onclick: remove }, '×'));
 }
 
-function startOrdering(draftKey, base) {
-  state[draftKey] ??= { status: markOf(base)?.current?.status ?? null, note: '' };
-  state.ordering = { draftKey, base };
-  state.orderRefused = null;
+// 「화면 순서」를 켰는지는 쓰던 코멘트에 적어 두어, 다른 곳을 열어 그 코멘트를 버리면 함께 꺼지게 한다.
+function startOrdering() {
+  state.draft ??= { status: markOf(state.target)?.current?.status ?? null, note: '' };
+  Object.assign(state.draft, { ordering: true, orderRefused: null });
   render();
 }
 
-function dropOrdering() {
-  state.ordering = null;
-  state.orderRefused = null;
+function dropOrdering(draft = state.draft) {
+  if (draft) Object.assign(draft, { ordering: false, orderRefused: null });
 }
 
 function stopOrdering() {
-  if (!state.ordering) return;
   dropOrdering();
   render();
 }
 
-const orderingOn = (draftKey, base) => state.ordering?.draftKey === draftKey && keyOf(state.ordering.base) === keyOf(base);
-const flowOrdering = () => state.view === 'flow' && state.flowPicked && !state.composing && !state.storyPath && !!state.target && orderingOn('draft', state.target);
+const flowOrdering = () => state.view === 'flow' && state.flowPicked && !state.composing && !state.storyPath && !!state.draft?.ordering;
 
 function addOrderScreen(id) {
-  const { draftKey, base } = state.ordering;
-  const draft = state[draftKey] ??= { status: markOf(base)?.current?.status ?? null, note: '' };
+  const { draft, target: base } = state;
   const tags = draft.tags ?? [base];
   const order = tags.find((t) => t.screens !== undefined);
   if (order?.screens.at(-1) === id) {
-    state.orderRefused = '같은 화면을 이어서 넣을 수 없습니다.';
+    draft.orderRefused = '같은 화면을 이어서 넣을 수 없습니다.';
     return renderRight();
   }
-  state.orderRefused = null;
+  draft.orderRefused = null;
   const next = { screens: [...(order?.screens ?? []), id] };
   if (order) draft.tags = tags.map((t) => (t === order ? next : t));
   else addTag(draft, next, base);
@@ -3368,18 +3363,18 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
   const untag = (t) => () => {
     const rest = tags.filter((x) => keyOf(x) !== keyOf(t));
     draft.tags = rest.length || keyOf(t) === keyOf(target) ? rest : undefined;
-    if (t.screens !== undefined && orderingOn(draftKey, target)) dropOrdering();
+    if (t.screens !== undefined) dropOrdering(draft);
     render();
   };
   const dropOrderStep = (order, i) => () => {
     const screens = order.screens.filter((_, k) => k !== i).filter((id, k, kept) => k === 0 || id !== kept[k - 1]);
     if (!screens.length) return untag(order)();
     draft.tags = tags.map((t) => (t === order ? { screens } : t));
-    state.orderRefused = null;
+    draft.orderRefused = null;
     render();
   };
   const tagOf = (t) => (t.screens !== undefined ? orderChip(t, untag(t), (i) => dropOrderStep(t, i)) : tagChip(keyOf(t) === keyOf(target) ? label : chipLabel(t, target), untag(t)));
-  const ordering = orderingOn(draftKey, target);
+  const ordering = !!draft.ordering;
   const picker = h('ul', { class: 'plain tag-pick', role: 'listbox', 'aria-label': '꼬리표 고르기', hidden: true });
   const field = h('textarea', {
     placeholder: '코멘트 — 상태 없이 글만 남겨도 됩니다. @ 로 꼬리표를 더합니다',
@@ -3401,13 +3396,13 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
         render();
         focusTalk();
       } }, `${label} 다시 붙이기`)],
-      state.view === 'flow' && !state.storyPath ? h('button', {
+      state.view === 'flow' && !state.storyPath && draftKey === 'draft' ? h('button', {
         type: 'button', class: 'order-toggle', 'aria-pressed': String(ordering),
         title: ordering ? '끄면 흐름 그림의 상자를 눌러 화면을 엽니다' : '켜 두는 동안 흐름 그림의 상자를 누르면 그 화면이 화면 순서 꼬리표의 끝에 붙습니다',
-        onclick: () => (ordering ? stopOrdering() : startOrdering(draftKey, target)),
+        onclick: () => (ordering ? stopOrdering() : startOrdering()),
       }, '화면 순서') : null,
       ordering && !tags.some((t) => t.screens !== undefined) ? h('span', { class: 'muted order-hint' }, '그림에서 화면을 차례로 누르세요') : null)),
-    ordering && state.orderRefused ? h('p', { class: 'error order-error' }, state.orderRefused) : null,
+    ordering && draft.orderRefused ? h('p', { class: 'error order-error' }, draft.orderRefused) : null,
     h('div', { class: 'statuses' }, statuses),
     h('div', { class: 'tag-field' }, field, picker),
     state.error ? h('p', { class: 'error' }, state.error) : null,
@@ -3645,7 +3640,7 @@ async function postMark(tags, draftKey, statusOn) {
   const here = ownerOf(draftKey);
   const untouched = !!here && keyOf(here) === keyOf(target) && !unsaved(target, state[draftKey]);
   if (state[draftKey] === draft || untouched) state[draftKey] = null;
-  if (state.ordering?.draftKey === draftKey) dropOrdering();
+  dropOrdering(draft);
   try {
     await load();
   } catch (err) {
@@ -4759,7 +4754,7 @@ function renderGaps() {
 
 function composeOverlay() {
   if (flowOrdering()) {
-    const order = (state[state.ordering.draftKey]?.tags ?? []).find((t) => t.screens !== undefined);
+    const order = (state.draft.tags ?? []).find((t) => t.screens !== undefined);
     return order ? { st: { steps: order.screens.map((screen) => ({ screen, onMap: true })), links: [] }, hidden: new Map(), composing: true } : null;
   }
   const c = flowComposing() ? state.compose : null;

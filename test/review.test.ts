@@ -11610,6 +11610,12 @@ test('in a browser, 「화면 순서」 in the tags of a screen opened in the fl
         await pressBox(p, '/lab#Lab');
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/lab#Lab'));
         assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'nor on again back on /lab');
+        await orderToggle(p).click();
+        await p.goBack();
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/signin#SignIn'));
+        await p.goForward();
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/lab#Lab'));
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'nor after going back and forward');
         await pressBox(p, '/help#Help');
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/help#Help'));
 
