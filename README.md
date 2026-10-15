@@ -718,6 +718,21 @@ the reason. The comment stays while the story has that screen at that step, and 
 tab, named with the step or link, once the story file has another screen there or is gone; while the story file cannot
 be read it stays under 「목록 밖 스토리 코멘트」.
 
+**Comments on a screen order.** In the flow, the tags of the form under a screen opened from its box end with
+「화면 순서」. While it is on, pressing a box, or Enter in the flow's search field, puts that screen at the end of a
+「화면 순서」 tag instead of opening it, and the box shows its number in the order; the screen opened before stays
+open. The first screen takes the place of the default tag while that is the only tag, and is added to the tags
+otherwise. The same box twice in a row is refused with a line under the tags. Each screen in the tag has its own ×,
+and the tag's last × takes the whole order off. Saving, taking the tag off, pressing 「화면 순서」 again, Escape outside
+the form, 「새 스토리」 or the list view turn it off, and a box opens its screen again. The comment is saved with
+`"target": { "screens": [ … ] }`, the screen IDs in the order pressed, and written to
+`<marksDir>/stories/orders/<key>/`, the key being the IDs joined with ` > ` and shortened as for a candidate. An order
+holds one screen or more, never the same screen twice in a row, and a comment carries one order at most; it takes
+comments only, and a status sent with one is refused with the reason. The comment shows in the conversation of each
+screen in the order and in 「전체」 under the order, and never enters the task list, so it reaches a coding agent only
+as the lines printed while the review runs. Once a screen of the order leaves the map, the comment shows under
+「떨어져 나감」 of the screens list with the order.
+
 **Comments on several places or on none.** A comment can carry more than one tag, or none. It is saved once, with
 `"targets": [ … ]` in place of `"target"`, each entry in the shape a single target has; a comment with one tag keeps
 `"target"`, so marks saved before are read as they were. A comment with several tags is written to the folder of its
@@ -779,7 +794,11 @@ its `componentFile`, `routeFile` and route `line` (`"onMap": false` instead when
 `hop`, `{"file","from","to","verdict","ways","preconditions"}`, the two screens in the same shape, the link's verdict
 and where it is written as on the story, and the preconditions of the story that concern that link. It is `null` once
 the story no longer has that step or link, and while the story file or the map cannot be read or the map was built
-before stories. A coding agent that launched the page can act on it without waiting for the end. Every open page
+before stories. A comment or reply on a screen order carries `"where": {"screens","links"}`: `screens` has each screen
+in the order in the shape of a step's screen, and `links` has, for each two neighbouring screens, `from`, `to`, the
+verdict of the link between them and `ways`, as for a link between two steps of a story. It is `null` while the map
+cannot be read or was built before stories. A coding agent that launched the page can act on it without waiting for
+the end. Every open page
 receives the same save at once and shows it without a reload, so a mark left in one window appears in another.
 
 **Replies.** `reply <config> <comment ID> "<text>"` answers a comment. The reply is a mark with no status, saved as

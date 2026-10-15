@@ -113,6 +113,11 @@ test('the agent skill says what a comment on a step or on the link between two s
   assert.match(SKILL, /`comments on steps` and\s+`comments on links between steps`/);
 });
 
+test('the agent skill says what a comment on a screen order carries and that it is answered with the screens found between, without writing a story or a candidate', () => {
+  assert.match(SKILL, /`\{ "screens": \[ … \] \}`[\s\S]*`screens`[\s\S]*`componentFile`[\s\S]*`links`[\s\S]*`verdict`/);
+  assert.match(SKILL, /Follow the links of the map[\s\S]*Do not\s+write a story file or a candidate file/);
+});
+
 test('the agent skill says what a comment on a story candidate carries and that it is answered from the record or the test, outside the task list', () => {
   assert.match(SKILL, /`\{ "candidate": "<key>" \}`/);
   assert.match(SKILL, /`\{ "record", "steps" \}` with `stepRanges`[\s\S]*`\{ "report", "tests" \}`/);

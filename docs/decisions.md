@@ -1776,6 +1776,24 @@ Alternatives compared:
 - Every comment with several targets in `general/`: the files of a screen would be split between two folders by the
   number of tags.
 
+**A comment on a screen order picked in the flow has a target of its own, `{ screens: [<screen ID>, …] }`, is saved
+under `stories/orders/<the IDs joined with " > ">/`, and shows in the conversation of each screen in the order.**
+#253 asked for the screens the reviewer presses in the flow to go to the agent as one tag, and the issue's comments
+of 2026-10-13 and 2026-10-15 settled the shape: a list named like the `screens` of a story file, so the agent can pass
+it on as it is, and a folder beside the candidates' with the same rule for names, so git shows which order a comment
+was left on. An order may hold a single screen, as a story may; the reviewer often picks the start and writes the
+rest. The comment is listed in each screen's conversation because that is where the form it was written in sits, and
+the order's own first screen is where 「전체」 opens it. 「화면 순서」 sits in the tags, not on the flow, and pressing a
+box adds to the order only while it is on, as 「새 스토리」 does for steps; it is shown only with the flow, where the
+boxes are.
+Alternatives compared:
+- `{ order: "A > B" }`, the candidate's key as a string: a reader would have to split it again, and the shape would
+  differ from the story file the agent passes it to.
+- A candidate target with a draft flag: an order that is not a candidate would be called one, and its comments would
+  come off with the candidates that are accepted or discarded.
+- `general/` for these comments: no new folder rule, but git would not show which order a comment is about.
+- Showing the comment only in 「전체」: after saving, it would leave the conversation it was written in.
+
 ## Why this is worth building — prior art (checked 2026-09-29)
 
 Four research passes examined 84 tools, repositories, agent skills, MCP servers and papers. None
