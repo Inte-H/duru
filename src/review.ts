@@ -13,7 +13,7 @@ import { buildFlow } from './flow.ts';
 import { addJudgment, applyJudgments, loadJudgments } from './judgments.ts';
 import { addMark, addReply, classifyMarks, loadMarks, recordKind } from './marks.ts';
 import type { Mark } from './marks.ts';
-import { linkKey, locatePart, locateStoryPart } from './parts.ts';
+import { linkKey, locateOrder, locatePart, locateStoryPart } from './parts.ts';
 import type { StoryPath } from './parts.ts';
 import { asIsPath, opensAsIs, preparePathValues, unknownPathValues } from './path-values.ts';
 import { addStory, editStory } from './stories.ts';
@@ -162,7 +162,7 @@ function readBody(req: http.IncomingMessage) {
   });
 }
 
-type Where = ReturnType<typeof locatePart> | ReturnType<typeof locateStoryPart> | ReturnType<typeof candidatePlace> | null;
+type Where = ReturnType<typeof locatePart> | ReturnType<typeof locateStoryPart> | ReturnType<typeof candidatePlace> | ReturnType<typeof locateOrder> | null;
 type Target = NonNullable<Mark['target']>;
 export type AnnouncedMark = Mark & { duru: string; where?: Where; wheres?: Where[] };
 
@@ -219,7 +219,8 @@ export async function startReviewServer(config: any, { port = 0, author = review
       return null;
     }
   };
-  const whereOf = (target: Target) => (target.part ? partWhere(target) : target.candidate !== undefined ? candidateWhere(target.candidate) : undefined);
+  const orderWhere = (screens: string[]) => readOrNull(() => locateOrder(screens, readMap(mapFile)));
+  const whereOf = (target: Target) => (target.part ? partWhere(target) : target.candidate !== undefined ? candidateWhere(target.candidate) : target.screens !== undefined ? orderWhere(target.screens) : undefined);
   const lineOf = (mark: Mark): AnnouncedMark => {
     if (mark.targets) return { duru: recordKind(mark), ...mark, wheres: mark.targets.map((t) => whereOf(t) ?? null) };
     const where = whereOf(mark.target!);
