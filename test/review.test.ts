@@ -11607,6 +11607,9 @@ test('in a browser, 「화면 순서」 in the tags of a screen opened in the fl
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/signin#SignIn'));
         await p.locator('#right-info .history li.reached', { hasText: 'fill in a way through' }).waitFor();
         assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'turned on for /lab, it is not on for the screen opened from 「전체」');
+        await pressBox(p, '/lab#Lab');
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/lab#Lab'));
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'nor on again back on /lab');
         await pressBox(p, '/help#Help');
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/help#Help'));
 

@@ -223,7 +223,8 @@ such a pair or hand it over for tagging; a handed-over pair appears in the task 
    the note what should happen between them. Its line carries `where` with `screens`, each screen's `id`,
    `componentFile`, `routeFile` and route `line` (`"onMap": false` when it is not on the map), and `links`, for each
    two neighbouring screens `from`, `to`, the `verdict` of the link between them and `ways`, as for a link between two
-   steps of a story. `where` is `null` while the map cannot be read. Follow the links of the map from each screen to
+   steps of a story. `where` is `null` while the map cannot be read or was built before stories; then
+   answer from the screen IDs, and tell the user to run `duru rebuild`. Follow the links of the map from each screen to
    the next to find the screens between them that fit the note, and reply with the whole order you found, naming the
    screens you put in and each link that is broken or needs a condition; if no way joins two of them, say so. Do not
    write a story file or a candidate file for it. A comment on a screen order takes no status and never appears in
