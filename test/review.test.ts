@@ -11545,3 +11545,69 @@ test('in a browser, once a candidate with comments is accepted or discarded, its
       }));
   });
 });
+
+const orderSteps = (p: Page) => p.locator('#right-dock .order-tag .order-step').evaluateAll((steps) => steps.map((s) => s.firstChild!.textContent));
+const orderToggle = (p: Page) => p.locator('#right-dock .order-toggle');
+
+test('in a browser, 「화면 순서」 in the tags of a screen opened in the flow makes each box pressed join an order tag in place of the screen, numbered on its box, refuses the same box twice in a row, lets a screen or the whole tag go, and saving turns it off: the comment is saved on the screen order, shows in the conversation of each screen in it and in 「전체」, and goes to 「떨어져 나감」 once a screen of it is gone', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({}, (config) => {
+    addMark(config.marksDir, { target: { screens: ['/home#Home', '/gone#Gone'] }, note: 'lost order', author: 'reviewer' }, new Date('2026-10-15T01:00:00Z'));
+    return withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#flow .box.screen');
+        await pressBox(p, '/home#Home');
+        await p.waitForSelector('#right-dock .order-toggle');
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false');
+
+        await orderToggle(p).click();
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'true');
+        assert.equal(await p.textContent('#right-dock .order-hint'), '그림에서 화면을 차례로 누르세요');
+        assert.match((await (await screenBox(p, '/lab#Lab')).getAttribute('title'))!, /\n누르면 화면 순서 꼬리표의 끝에 넣습니다$/);
+        await pressBox(p, '/lab#Lab');
+        assert.deepEqual(await orderSteps(p), ['1 /lab']);
+        await p.click('#right-dock .order-tag > button');
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'taking the tag off turns it off');
+        assert.deepEqual(await p.locator('#right-dock .mark-form .tags .tag-label').allTextContents(), ['화면 전체']);
+
+        await orderToggle(p).click();
+        for (const id of ['/signin#SignIn', '/help#Help']) await pressBox(p, id);
+        assert.deepEqual(await orderSteps(p), ['1 /signin', '2 /help']);
+        assert.deepEqual(await p.locator('#right-dock .mark-form .tags .tag-label').allTextContents(), ['화면 순서'], 'the order takes the place of the screen');
+        assert.deepEqual((await pillMarks(p, 'story-badge')).sort(), [['/help#Help', '2'], ['/signin#SignIn', '1']]);
+        assert.match(await placeOf(p), /screen=\/home#Home/, 'the screen opened before stays open');
+        await pressBox(p, '/help#Help');
+        assert.equal(await p.textContent('#right-dock .order-error'), '같은 화면을 이어서 넣을 수 없습니다.');
+        await pressBox(p, '/home#Home');
+        assert.deepEqual(await orderSteps(p), ['1 /signin', '2 /help', '3 /home']);
+        assert.equal(await p.locator('#right-dock .order-error').count(), 0);
+        await p.locator('#right-dock .order-tag .order-step').nth(1).locator('button').click();
+        assert.deepEqual(await orderSteps(p), ['1 /signin', '2 /home']);
+
+        await p.fill('#right-dock textarea', 'fill in a way through');
+        await p.click('#right-dock button.save');
+        await p.locator('#right-info .history li', { hasText: 'fill in a way through' }).waitFor();
+        const saved = loadMarks(config.marksDir).filter((m) => m.note === 'fill in a way through');
+        assert.deepEqual(saved.map((m) => [m.target, m.status]), [[{ screens: ['/signin#SignIn', '/home#Home'] }, undefined]]);
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'saving turns it off');
+        assert.equal(await p.locator('#flow .story-badge').count(), 0);
+        assert.equal(await p.textContent('#right-info .history li:has-text("fill in a way through") .tag-label'), '화면 순서 /signin → /home');
+
+        await pressBox(p, '/signin#SignIn');
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/signin#SignIn'));
+        await p.locator('#right-info .history li', { hasText: 'fill in a way through' }).waitFor();
+        await pressBox(p, '/lab#Lab');
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/lab#Lab'));
+        assert.equal(await p.locator('#right-info .history li', { hasText: 'fill in a way through' }).count(), 0);
+
+        await p.click('#right .talk-scope button:has-text("전체")');
+        const group = p.locator('#right-info .talk-group', { hasText: 'fill in a way through' });
+        assert.equal(await group.locator('h3').textContent(), '화면 순서 /signin → /home');
+        await group.locator('.talk-line').click();
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/signin#SignIn'));
+        await p.locator('#right-info .history li.reached', { hasText: 'fill in a way through' }).waitFor();
+
+        await p.click('#view-list');
+        assert.deepEqual(await p.locator('#left .detached li code').allTextContents(), ['화면 순서 /home → /gone#Gone']);
+      }, { view: 'flow' }));
+  });
+});

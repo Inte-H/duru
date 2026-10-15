@@ -282,6 +282,10 @@
   .history-filter { margin-top: 6px; }
   .tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--selected); font-size: 12px; overflow-wrap: anywhere; }
   .tag button, .tags button.retag, .history-filter button { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+  .tag.order-tag { flex-wrap: wrap; border-color: var(--accent); }
+  .order-tag .order-step { display: inline-flex; align-items: center; gap: 2px; }
+  .tags button.order-toggle { padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+  .tags button.order-toggle[aria-pressed="true"] { border-color: var(--accent); background: var(--selected); color: var(--accent); font-weight: 600; }
   .error { color: var(--fail); }
   a { color: var(--accent); }
   .views { display: flex; gap: 4px; }
@@ -558,7 +562,7 @@ const STORY_FILTERS = [
   ...['untested', 'partial', 'fail'].map((key) => ({ key, ...STORY_STATUS[key], status: true, keep: (st) => st.status === key })),
   { key: 'broken', label: '링크 없음', title: '이웃한 두 화면을 잇는 링크가 맵에 없는 자리가 있는 스토리', keep: (st) => st.broken },
 ];
-const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null };
+const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null, ordering: null, orderRefused: null };
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -578,18 +582,24 @@ function fill(el, ...children) {
 
 const keyOf = (t) => (t.candidate !== undefined
   ? `candidate(${t.candidate})`
+  : t.screens !== undefined
+  ? `order(${t.screens.join(' > ')})`
   : t.story !== undefined
   ? [`story(${t.story})`, t.part && `part:${t.part.kind}:${JSON.stringify(t.part.key)}`].filter(Boolean).join(' ')
   : [t.node, t.option && `${t.option.key}=${t.option.value}`, t.depth, t.case && `case:${t.case}`, t.part && `part:${t.part.kind}:${JSON.stringify(t.part.key)}`].filter(Boolean).join(' '));
 const optionLabel = (o) => `${o.key} ${VALUE_LABEL[o.value]}`;
+const orderText = (screens) => screens.map(screenLabel).join(' → ');
 const targetName = (t) => (t.candidate !== undefined
   ? `후보 ${candidateName(t.candidate)}`
+  : t.screens !== undefined
+  ? `화면 순서 ${orderText(t.screens)}`
   : t.story !== undefined
   ? `스토리 ${state.data.stories.list.find((st) => st.id === t.story)?.name ?? t.story}`
   : [t.node, t.option && optionLabel(t.option), t.depth && `${DEPTH_LABELS[t.depth]} 깊이`, t.case && `경우 ${state.data.caseKinds[t.case] ?? t.case}`].filter(Boolean).join(' · '));
 const conditionLabel = (key) => (key.startsWith('role:') ? `역할 ${key.slice('role:'.length)}` : `설정 ${key.slice('setting:'.length)}`);
 const tagLabel = (t) => {
   if (t.candidate !== undefined) return '후보';
+  if (t.screens !== undefined) return targetName(t);
   if (t.part?.kind === 'step') return `단계 ${t.part.key.step} ${screenLabel(t.part.key.screen)}`;
   if (t.part?.kind === 'hop') return `단계 ${t.part.key.step} → ${t.part.key.step + 1} 연결`;
   if (t.story !== undefined) return '스토리';
@@ -943,7 +953,7 @@ function renderLeft() {
     }
     return renderUntaggedList();
   }
-  const detached = markList('떨어져 나감', 'detached', marks.detached.filter((m) => m.target.story === undefined && m.target.candidate === undefined), (m) => (m.target.part ? `${m.target.node} · ${tagLabel(m.target)}` : m.key), h('p', { class: 'muted' }, '맵에서 사라진 노드, 설정에서 빠진 경우 종류, 결과에서 사라진 테스트, 화면에서 사라진 접근 조건과 들어오는 링크에 달린 코멘트가 여기 남습니다.'));
+  const detached = markList('떨어져 나감', 'detached', marks.detached.filter((m) => m.target.story === undefined && m.target.candidate === undefined), (m) => (m.target.part ? `${m.target.node} · ${tagLabel(m.target)}` : m.target.screens ? tagLabel(m.target) : m.key), h('p', { class: 'muted' }, '맵에서 사라진 노드, 설정에서 빠진 경우 종류, 결과에서 사라진 테스트, 화면에서 사라진 접근 조건과 들어오는 링크, 화면이 사라진 화면 순서에 달린 코멘트가 여기 남습니다.'));
   const list = keptLeftList(left, tabs, 'screen-list');
   if (list) {
     const search = left.querySelector(':scope > .filters > input[type=search]');
@@ -1292,6 +1302,7 @@ function addTag(draft, target, base) {
 
 // 지금 대화의 화면 · 호출 · 스토리가 아닌 대상은 어디의 칸인지 앞에 붙인다.
 function chipLabel(t, here) {
+  if (t.screens !== undefined) return tagLabel(t);
   const own = t.candidate !== undefined ? here.candidate === t.candidate : t.story !== undefined ? here.story === t.story : here.node === t.node;
   if (own) return tagLabel(t);
   const where = t.candidate !== undefined ? `후보 ${candidateName(t.candidate)}` : t.story !== undefined ? `스토리 ${t.story}` : `${nodeWord(t.node)} ${screenLabel(t.node)}`;
@@ -2691,6 +2702,7 @@ const newStoryButton = () => (oldMap() ? null : h('button', { class: 'new-story'
 function startCompose() {
   state.compose ??= newCompose();
   state.composing = true;
+  state.ordering = null;
   state.candidate = null;
   state.candidateTalk = null;
   state.storyError = null;
@@ -3143,10 +3155,10 @@ const TALK_FILTERS = [
   ...Object.entries(MARK_STATUS).map(([key, label]) => ({ key, label, keep: (m, r) => m.current?.status === key && saidIn(m).find((x) => x.status === key)?.id === r.id })),
 ];
 
-const noTarget = (t) => t.node === undefined && t.story === undefined && t.candidate === undefined;
-const groupOf = (t) => (noTarget(t) ? 'general()' : t.candidate !== undefined ? `candidate(${t.candidate})` : t.story !== undefined ? `story(${t.story})` : t.node);
-const groupTitle = (t) => (noTarget(t) ? '대상 없음' : t.candidate !== undefined
-  ? `후보 ${candidateName(t.candidate)}`
+const noTarget = (t) => t.node === undefined && t.story === undefined && t.candidate === undefined && t.screens === undefined;
+const groupOf = (t) => (noTarget(t) ? 'general()' : t.candidate !== undefined || t.screens !== undefined ? keyOf(t) : t.story !== undefined ? `story(${t.story})` : t.node);
+const groupTitle = (t) => (noTarget(t) ? '대상 없음' : t.candidate !== undefined || t.screens !== undefined
+  ? targetName(t)
   : t.story !== undefined
   ? `스토리 ${state.data.stories.list.find((st) => st.id === t.story)?.name ?? t.story}`
   : callOf(t.node) ? `호출 ${t.node}` : screenLabel(t.node));
@@ -3193,6 +3205,7 @@ function allTalk() {
 }
 
 function reachTalk(target, recordId) {
+  if (target.screens !== undefined) target = { node: target.screens.find(screenOf) };
   const screen = target.node === undefined ? null : screenOf(target.node) ? target.node : callOf(target.node)?.screens[0];
   if (screen === undefined) return;
   state.talkScope = 'here';
@@ -3238,7 +3251,8 @@ function renderScreenRight(info, dock) {
 }
 
 const talkIn = (marks, target) => marks.filter((m) => (target.candidate !== undefined ? m.target.candidate === target.candidate
-  : target.story !== undefined ? m.target.story === target.story : m.target.story === undefined && m.target.node === target.node));
+  : target.story !== undefined ? m.target.story === target.story
+  : m.target.screens !== undefined ? m.target.screens.includes(target.node) : m.target.story === undefined && m.target.node === target.node));
 const talkOf = (target) => talkIn([...state.data.marks.attached, ...state.data.marks.detached], target);
 const attachedTalk = (target) => talkIn(state.data.marks.attached, target);
 
@@ -3246,6 +3260,49 @@ const byDate = (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id
 
 function tagChip(label, remove) {
   return h('span', { class: 'tag' }, h('span', { class: 'tag-label' }, label), remove ? h('button', { type: 'button', title: '꼬리표 빼기', 'aria-label': `${label} 꼬리표 빼기`, onclick: remove }, '×') : null);
+}
+
+function orderChip(order, remove, dropStep) {
+  return h('span', { class: 'tag order-tag' },
+    h('span', { class: 'tag-label' }, '화면 순서'),
+    order.screens.flatMap((id, i) => [i ? h('span', { 'aria-hidden': 'true' }, '→') : null, h('span', { class: 'order-step' },
+      `${i + 1} ${screenLabel(id)}`,
+      h('button', { type: 'button', title: '이 화면 빼기', 'aria-label': `${i + 1} 번째 화면 ${screenLabel(id)} 빼기`, onclick: dropStep(i) }, '×'))]),
+    h('button', { type: 'button', title: '꼬리표 빼기', 'aria-label': '화면 순서 꼬리표 빼기', onclick: remove }, '×'));
+}
+
+function startOrdering(draftKey, base) {
+  state[draftKey] ??= { status: markOf(base)?.current?.status ?? null, note: '' };
+  state.ordering = { draftKey, base };
+  state.orderRefused = null;
+  render();
+}
+
+function stopOrdering() {
+  if (!state.ordering) return;
+  state.ordering = null;
+  state.orderRefused = null;
+  render();
+}
+
+const flowOrdering = () => !!state.ordering && state.view === 'flow' && !state.composing;
+
+function addOrderScreen(id) {
+  const { draftKey, base } = state.ordering;
+  const draft = state[draftKey] ??= { status: markOf(base)?.current?.status ?? null, note: '' };
+  const tags = draft.tags ?? [base];
+  const order = tags.find((t) => t.screens !== undefined);
+  if (order?.screens.at(-1) === id) {
+    state.orderRefused = '같은 화면을 이어서 넣을 수 없습니다.';
+    return renderRight();
+  }
+  state.orderRefused = null;
+  const next = { screens: [...(order?.screens ?? []), id] };
+  if (order) draft.tags = tags.map((t) => (t === order ? next : t));
+  else addTag(draft, next, base);
+  const box = document.querySelector(`#flow .box.screen[data-key="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+  renderRight();
+  renderFlow({ pressed: box ? { key: id, top: box.top, left: box.left } : null });
 }
 
 function talkThread(target, { labelled }) {
@@ -3305,8 +3362,18 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
   const untag = (t) => () => {
     const rest = tags.filter((x) => keyOf(x) !== keyOf(t));
     draft.tags = rest.length || keyOf(t) === keyOf(target) ? rest : undefined;
+    if (t.screens !== undefined) stopOrdering();
     render();
   };
+  const dropOrderStep = (order, i) => () => {
+    const screens = order.screens.filter((_, k) => k !== i).filter((id, k, kept) => k === 0 || id !== kept[k - 1]);
+    if (!screens.length) return untag(order)();
+    draft.tags = tags.map((t) => (t === order ? { screens } : t));
+    state.orderRefused = null;
+    render();
+  };
+  const tagOf = (t) => (t.screens !== undefined ? orderChip(t, untag(t), (i) => dropOrderStep(t, i)) : tagChip(keyOf(t) === keyOf(target) ? label : chipLabel(t, target), untag(t)));
+  const ordering = state.ordering?.draftKey === draftKey;
   const picker = h('ul', { class: 'plain tag-pick', role: 'listbox', 'aria-label': '꼬리표 고르기', hidden: true });
   const field = h('textarea', {
     placeholder: '코멘트 — 상태 없이 글만 남겨도 됩니다. @ 로 꼬리표를 더합니다',
@@ -3322,12 +3389,19 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
   }, draft.note);
   return h('div', { class: 'mark-form' },
     h('div', { class: 'talk-head' }, folded ? h('h2', {}, '에이전트와 대화') : null, h('div', { class: 'tags' }, '꼬리표 ', tags.length
-      ? tags.map((t) => tagChip(keyOf(t) === keyOf(target) ? label : chipLabel(t, target), untag(t)))
+      ? tags.map(tagOf)
       : [h('span', { class: 'muted', title: '어느 칸에도 붙이지 않고 묻습니다. 「전체」의 「대상 없음」에 나옵니다' }, '없음'), h('button', { type: 'button', class: 'retag', onclick: () => {
         draft.tags = undefined;
         render();
         focusTalk();
-      } }, `${label} 다시 붙이기`)])),
+      } }, `${label} 다시 붙이기`)],
+      state.view === 'flow' ? h('button', {
+        type: 'button', class: 'order-toggle', 'aria-pressed': String(ordering),
+        title: ordering ? '끄면 흐름 그림의 상자를 눌러 화면을 엽니다' : '켜 두는 동안 흐름 그림의 상자를 누르면 그 화면이 화면 순서 꼬리표의 끝에 붙습니다',
+        onclick: () => (ordering ? stopOrdering() : startOrdering(draftKey, target)),
+      }, '화면 순서') : null,
+      ordering && !tags.some((t) => t.screens !== undefined) ? h('span', { class: 'muted order-hint' }, '그림에서 화면을 차례로 누르세요') : null)),
+    ordering && state.orderRefused ? h('p', { class: 'error order-error' }, state.orderRefused) : null,
     h('div', { class: 'statuses' }, statuses),
     h('div', { class: 'tag-field' }, field, picker),
     state.error ? h('p', { class: 'error' }, state.error) : null,
@@ -3565,6 +3639,7 @@ async function postMark(tags, draftKey, statusOn) {
   const here = ownerOf(draftKey);
   const untouched = !!here && keyOf(here) === keyOf(target) && !unsaved(target, state[draftKey]);
   if (state[draftKey] === draft || untouched) state[draftKey] = null;
+  if (state.ordering?.draftKey === draftKey) state.ordering = null;
   try {
     await load();
   } catch (err) {
@@ -4095,6 +4170,7 @@ const pathText = (path) => path.split(/(?=\/)/).flatMap((seg, i) => [i ? h('wbr'
 const needTag = (n) => (!n.restricted ? null : n.kinds.length ? n.kinds.map((k) => KIND_LABEL[k]).join('·') : MIXED_KINDS);
 const PICK_TIP = '누르면 이 화면에 이어진 길만 진하게 남기고 이 화면을 엽니다';
 const COMPOSE_TIP = '누르면 새 스토리의 단계로 넣습니다';
+const ORDER_TIP = '누르면 화면 순서 꼬리표의 끝에 넣습니다';
 
 function screenPill(n, pick = () => pickScreen(n.id)) {
   const status = statusOf(n.counts);
@@ -4112,7 +4188,7 @@ function screenPill(n, pick = () => pickScreen(n.id)) {
       n.moved ? `${LINK_VERDICT.configured}: ${n.moved.join(', ')}` : '',
       ...needs.tips,
       needs.bare ?? '',
-      flowComposing() ? COMPOSE_TIP : PICK_TIP,
+      flowComposing() ? COMPOSE_TIP : flowOrdering() ? ORDER_TIP : PICK_TIP,
     ].filter(Boolean).join('\n'),
     'aria-pressed': 'false',
     onclick: pick,
@@ -4289,12 +4365,14 @@ function ringScreen(id) {
 
 function pickScreen(id) {
   if (flowComposing()) return addComposeScreen(id);
+  if (flowOrdering()) return addOrderScreen(id);
   ringScreen(id);
   openPicked(id);
 }
 
 function unpickScreen() {
   state.flowPicked = false;
+  state.ordering = null;
   if (state.storyPath) state.storyPath.ring = null;
   render();
 }
@@ -4409,7 +4487,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || document.getElementById('flow')?.hidden !== false || document.querySelector('dialog[open]')) return;
   const open = [...document.querySelectorAll('[data-legend]')].filter(legendShown);
   for (const info of open) setLegend(info, false);
-  if (!open.length && state.flowPicked && !(e.target instanceof Element && e.target.closest('input, select, textarea, #center, #right'))) unpickScreen();
+  if (open.length || !state.flowPicked || (e.target instanceof Element && e.target.closest('input, select, textarea, #center, #right'))) return;
+  if (flowOrdering()) stopOrdering();
+  else unpickScreen();
 });
 // 끌었다 놓거나 스크롤바를 눌러도 click 이 오고, 상자를 누른 채 옆으로 비껴 놓으면 click 이 빈 곳으로 온다.
 const FLOW_EMPTY = '#flow, #flow .zoom-box, #flow .canvas, #flow .story-row, #flow .story-hop';
@@ -4423,7 +4503,7 @@ document.getElementById('flow').addEventListener('pointerdown', (e) => {
 document.getElementById('flow').addEventListener('click', (e) => {
   const press = flowPress;
   flowPress = null;
-  if (!state.flowPicked || !press || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) return;
+  if (!state.flowPicked || flowOrdering() || !press || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) return;
   if (e.target.matches(FLOW_EMPTY)) unpickScreen();
 });
 
@@ -4505,7 +4585,7 @@ function flowSearch() {
     },
   });
   if (flowSearchInput.value !== state.flowQuery) flowSearchInput.value = state.flowQuery;
-  flowSearchInput.title = flowComposing() ? 'Enter 를 누르면 찾은 첫 화면을 새 스토리의 단계로 넣습니다' : 'Enter 를 누르면 찾은 첫 화면을 고릅니다';
+  flowSearchInput.title = flowComposing() ? 'Enter 를 누르면 찾은 첫 화면을 새 스토리의 단계로 넣습니다' : flowOrdering() ? 'Enter 를 누르면 찾은 첫 화면을 화면 순서 꼬리표의 끝에 넣습니다' : 'Enter 를 누르면 찾은 첫 화면을 고릅니다';
   return flowSearchInput;
 }
 
@@ -4671,6 +4751,10 @@ function renderGaps() {
 }
 
 function composeOverlay() {
+  if (flowOrdering()) {
+    const order = (state[state.ordering.draftKey]?.tags ?? []).find((t) => t.screens !== undefined);
+    return order ? { st: { steps: order.screens.map((screen) => ({ screen, onMap: true })), links: [] }, hidden: new Map(), composing: true } : null;
+  }
   const c = flowComposing() ? state.compose : null;
   if (!c?.screens.length) return null;
   const st = checkedCompose(c) ?? { steps: c.screens.map((screen) => ({ screen, onMap: true })), links: [] };
@@ -4723,7 +4807,7 @@ function renderFlow({ bar = true, pressed = null } = {}) {
   }
   applyFlowEmphasis();
   Object.assign(flow, { scrollTop, scrollLeft });
-  if (pressed && flowComposing()) keepPressedBox(flow, pressed);
+  if (pressed && (flowComposing() || flowOrdering())) keepPressedBox(flow, pressed);
   for (const info of document.querySelectorAll('[data-legend]')) applyLegend(info);
   recordPlace();
 }
@@ -4731,6 +4815,7 @@ function renderFlow({ bar = true, pressed = null } = {}) {
 function setView(view) {
   if (!state.data || state.failed) return;
   state.view = view;
+  state.ordering = null;
   if (state.composing && view === 'list') state.side = 'stories';
   if (state.composing && view === 'flow') {
     state.flowPicked = false;
