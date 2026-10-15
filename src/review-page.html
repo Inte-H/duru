@@ -3271,7 +3271,6 @@ function orderChip(order, remove, dropStep) {
     h('button', { type: 'button', title: '꼬리표 빼기', 'aria-label': '화면 순서 꼬리표 빼기', onclick: remove }, '×'));
 }
 
-// 「화면 순서」를 켰는지는 쓰던 코멘트에 적어 두어, 다른 곳을 열어 그 코멘트를 버리면 함께 꺼지게 한다.
 function startOrdering() {
   state.draft ??= { status: markOf(state.target)?.current?.status ?? null, note: '' };
   Object.assign(state.draft, { ordering: true, orderRefused: null });
@@ -3374,7 +3373,7 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
     render();
   };
   const tagOf = (t) => (t.screens !== undefined ? orderChip(t, untag(t), (i) => dropOrderStep(t, i)) : tagChip(keyOf(t) === keyOf(target) ? label : chipLabel(t, target), untag(t)));
-  const ordering = !!draft.ordering;
+  const ordering = draftKey === 'draft' && flowOrdering();
   const picker = h('ul', { class: 'plain tag-pick', role: 'listbox', 'aria-label': '꼬리표 고르기', hidden: true });
   const field = h('textarea', {
     placeholder: '코멘트 — 상태 없이 글만 남겨도 됩니다. @ 로 꼬리표를 더합니다',
