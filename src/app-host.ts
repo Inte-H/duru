@@ -50,6 +50,7 @@ export interface RootDefaults {
 export interface AppHostOptions {
   port?: number;
   rootDefaults?: () => RootDefaults;
+  pageOrigins?: () => string[];
 }
 
 interface Login {
@@ -187,11 +188,31 @@ export function applyOverrides(names: string[], defaults: Record<string, Record<
 
 const WINDOW_NAMES = ['window', 'globalThis', 'self'];
 
+// 다른 사이트가 앱을 iframe 에 띄워도 URL 을 받아 가지 못하게, 리뷰 페이지의 origin 으로만 보낸다.
+const addressReporter = (origins: string[]) => `(() => {
+  if (window.parent === window) return;
+  const report = () => {
+    const url = location.pathname + location.search + location.hash;
+    for (const origin of ${literal(origins)}) window.parent.postMessage({ duru: 'address', url }, origin);
+  };
+  for (const name of ['pushState', 'replaceState']) {
+    const original = history[name];
+    history[name] = function (...args) {
+      const result = original.apply(this, args);
+      report();
+      return result;
+    };
+  }
+  addEventListener('popstate', report);
+  addEventListener('hashchange', report);
+  report();
+})();`;
+
 // 페이지마다 지우면 앱이 로그인하고 새로 고칠 때 다시 로그아웃되므로, 이 경로로 열 때만 토큰을 지운다.
 export const SIGN_OUT_PATH = '/__duru/sign-out';
 
 // incomplete 는 맵의 settingsDefaultsIncomplete 가운데 이 root 에 해당하는 목록이다.
-export async function startAppHost(app: AppConfig, { port = 0, rootDefaults = () => ({ values: {}, incomplete: [] }) }: AppHostOptions = {}) {
+export async function startAppHost(app: AppConfig, { port = 0, rootDefaults = () => ({ values: {}, incomplete: [] }), pageOrigins = () => [] }: AppHostOptions = {}) {
   const roles = Object.entries(app.roles ?? {});
   // 동시 로그인을 막는 앱에서 다른 로그인이 끊기지 않도록, 여러 역할이 같은 계정을 써도 계정마다 여기서 한 번만 로그인한다.
   const logins = new Map<string, Promise<Login>>();
@@ -206,9 +227,15 @@ export async function startAppHost(app: AppConfig, { port = 0, rootDefaults = ()
   const globalNames = settingsFile?.global.split('.').filter((n, i) => i > 0 || !WINDOW_NAMES.includes(n));
   let overrides: SettingsOverride[] = [];
 
-  // 앱 스크립트보다 먼저 돌아야, 앱이 처음 읽을 때 localStorage 에 토큰이 들어 있다.
-  const withToken = (html: string, login: Login | null) =>
-    (login?.storage ? withScript(html, `localStorage.setItem(${key}, ${literal(login.storage.value)});`) : html);
+  // 앱 스크립트보다 먼저 돌아야, 앱이 처음 읽을 때 localStorage 에 토큰이 들어 있고 앱이 처음 URL 을 바꿀 때도 알릴 수 있다.
+  const withScripts = (html: string, login: Login | null) => {
+    const origins = pageOrigins();
+    const code = [
+      login?.storage ? `localStorage.setItem(${key}, ${literal(login.storage.value)});` : '',
+      origins.length ? addressReporter(origins) : '',
+    ].join('');
+    return code ? withScript(html, code) : html;
+  };
 
   function signOutPage(res: http.ServerResponse, search: string) {
     const base = 'http://app.invalid';
@@ -299,7 +326,7 @@ export async function startAppHost(app: AppConfig, { port = 0, rootDefaults = ()
     // 화면 주소는 앱이 브라우저 안에서 처리하므로, 파일이 없는 주소에는 첫 페이지를 내준다.
     if (!file?.startsWith(app.files + path.sep) || !isFile(file)) file = path.join(app.files, 'index.html');
     const type = MIME[path.extname(file)] ?? 'application/octet-stream';
-    if (type === 'text/html') return send(res, 200, type, withToken(fs.readFileSync(file, 'utf8'), login));
+    if (type === 'text/html') return send(res, 200, type, withScripts(fs.readFileSync(file, 'utf8'), login));
     res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
     pipeline(fs.createReadStream(file), res, () => {});
   }
@@ -310,7 +337,7 @@ export async function startAppHost(app: AppConfig, { port = 0, rootDefaults = ()
     const headers = { 'content-type': type, 'cache-control': 'no-store' };
     if (type.startsWith('text/html')) {
       res.writeHead(r.status, headers);
-      return res.end(withToken(await r.text(), login));
+      return res.end(withScripts(await r.text(), login));
     }
     res.writeHead(r.status, headers);
     res.end(Buffer.from(await r.arrayBuffer()));

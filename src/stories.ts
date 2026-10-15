@@ -48,6 +48,7 @@ export const STORY_ID = /^[a-z0-9_-]+$/;
 const KEYS = ['name', 'screens', 'memo', 'author', 'date', 'source'];
 export const DISCARDED = 'discarded';
 export const CANDIDATES = 'candidates';
+export const RECORDS = 'records';
 const DATE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 
 export const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
@@ -86,7 +87,7 @@ const SAY = {
 
 function storyFiles(dir: string): { root: string; files: { file: string; reason?: string }[] } {
   if (!fs.statSync(dir).isDirectory()) return { root: path.dirname(dir), files: [{ file: path.basename(dir) }] };
-  return { root: dir, files: jsonFiles(dir, SAY).filter((f) => ![DISCARDED, CANDIDATES].includes(f.file.split(path.sep)[0])) };
+  return { root: dir, files: jsonFiles(dir, SAY).filter((f) => ![DISCARDED, CANDIDATES, RECORDS].includes(f.file.split(path.sep)[0])) };
 }
 
 export function loadStories(dir: string): { stories: Story[]; notices: Notice[] } {

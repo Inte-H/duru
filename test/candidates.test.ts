@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { acceptCandidate, discardCandidate, storeCandidates, storyCandidates, unacceptStory, undiscardCandidate } from '../src/candidates.ts';
+import { acceptCandidate, discardCandidate, saveVisitRecord, storeCandidates, storyCandidates, unacceptStory, undiscardCandidate } from '../src/candidates.ts';
 import { compare, loadConfig } from '../src/config.ts';
 import { buildMap } from '../src/map.ts';
 import { editStory, loadStories } from '../src/stories.ts';
@@ -141,6 +141,44 @@ test('of two records with the same screens only the first in path order is a can
   withFolder(recordsIn({ 'b.json': ['/home', '/lab'], 'a.json': ['/home', '/home?x=1', '/lab'] }), (dir: string) => {
     const { list } = candidatesOf({ configDir: dir, visitRecords: [dir], storiesDir: path.join(dir, 'stories') });
     assert.deepEqual(list.map((c) => c.name), ['a']);
+  });
+});
+
+test('a visit record saved from the app pane is a new file in the records folder of the stories folder holding only the url of each step, read for candidates beside visitRecords and never as a story', () => {
+  withStoryCopy((dir: string) => {
+    const now = new Date('2026-10-15T01:02:03Z');
+    const file = saveVisitRecord(dir, [{ url: '/home' }, { url: '/home#top', at: 1 }, { url: '/lab?run=1' }], now);
+    const other = saveVisitRecord(dir, [{ url: '/help' }], now);
+    assert.match(file, /^records[/\\]2026-10-15-[0-9a-f]{8}\.json$/);
+    assert.notEqual(file, other);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')), { steps: [{ url: '/home' }, { url: '/home#top' }, { url: '/lab?run=1' }] });
+    const name = path.basename(file, '.json');
+    const { list, notices } = candidatesOf({ configDir: path.dirname(dir), storiesDir: dir });
+    assert.deepEqual(shape(list.find((c) => c.name === name)!), {
+      name,
+      screens: ['/home#Home', '/lab#Lab'],
+      source: { record: `${path.basename(dir)}/records/${name}.json`, steps: [1, 3] },
+      stepRanges: [[1, 2], [3, 3]],
+    });
+    assert.ok(['open-help', 'publish-document', path.basename(other, '.json')].every((n) => list.some((c) => c.name === n)));
+    assert.deepEqual(notices.map((n) => n.file), ['example-visits/broken-record.json'].map((f) => path.relative(path.dirname(dir), path.join(FIXTURE, f)).split(path.sep).join('/')));
+    assert.deepEqual(loadStories(dir).notices.map((n) => n.file), ['lab-shortcut.json']);
+  });
+});
+
+test('saving a visit record needs one step or more, each with an address inside the app starting with /, and a records entry that is a file is refused when saving and noted when reading candidates', () => {
+  withFolder({}, (dir: string) => {
+    const stories = path.join(dir, 'stories');
+    for (const steps of [[], 'x', ['/home'], [{}], [{ url: '' }], [{ url: 'http://evil.example/home' }], [{ url: '//evil.example/home' }], [{ url: '/home' }, { url: 3 }]]) {
+      assert.throws(() => saveVisitRecord(stories, steps), /^Error: steps 는 \/ 로 시작하는 앱 안 주소를/, JSON.stringify(steps));
+    }
+    assert.ok(!fs.existsSync(path.join(stories, 'records')));
+    fs.mkdirSync(stories);
+    fs.writeFileSync(path.join(stories, 'records'), 'x');
+    assert.throws(() => saveVisitRecord(stories, [{ url: '/home' }]), /records 가 파일이라 기록을 쓸 수 없습니다/);
+    const { list, notices } = candidatesOf({ configDir: dir, visitRecords: [], storiesDir: stories });
+    assert.deepEqual(list, []);
+    assert.deepEqual(notices, [{ file: 'stories/records', reason: 'records 는 앱 칸에서 남긴 방문 기록을 담는 폴더여야 합니다' }]);
   });
 });
 

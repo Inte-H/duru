@@ -569,6 +569,28 @@ test('without signedOutPaths there is no signed-out address', async () => {
   );
 });
 
+test('every app page on every app address, signed in, signed out or as a role, and a path with no file, carries a script ahead of the app\'s own that reports the address only to the review page, while other files and the sign-out page carry none', async () => {
+  await withFakeApi((api) =>
+    withPasswords(ALL_PASSWORDS, () =>
+      withRebuiltFixture({ app: { ...roleSettings(api).app, signedOutPaths: ['/signin'] } }, (config) =>
+        withServer(config, 'reviewer', async (base) => {
+          const { app } = await (await fetch(`${base}/api/data`)).json();
+          const origins = JSON.stringify([base, `http://localhost:${new URL(base).port}`]);
+          const pages = [`${app.url}/home`, `${app.url}/no/such/screen`, `${app.signedOutUrl}/signin`, ...app.roles.map((r: { url: string }) => `${r.url}/home`)];
+          assert.equal(pages.length, 5);
+          for (const page of pages) {
+            const html = await (await fetch(page)).text();
+            assert.ok(html.includes(`for (const origin of ${origins}) window.parent.postMessage({ duru: 'address', url }, origin);`), page);
+            assert.ok(html.indexOf('history[name] = function') < html.indexOf('<script src="./settings.js">'), page);
+          }
+          assert.doesNotMatch(await (await fetch(`${app.url}/app.js`)).text(), /postMessage/);
+          assert.doesNotMatch(await (await fetch(`${app.signedOutUrl}${app.signOutPath}?to=%2Fsignin`)).text(), /postMessage/);
+        }),
+      ),
+    ),
+  );
+});
+
 test('signedOutPaths that match no screen path in the map are listed for the page', async () => {
   await withFakeApi((api) =>
     withPassword('s3cret', () =>
@@ -6016,6 +6038,133 @@ test('in a browser, the chosen screen shows the logged-in app in a frame above i
   );
 });
 
+const recordsIn = (dir: string) => (fs.existsSync(path.join(dir, 'records')) ? fs.readdirSync(path.join(dir, 'records')).sort() : [])
+  .map((f) => JSON.parse(fs.readFileSync(path.join(dir, 'records', f), 'utf8')).steps.map((s: { url: string }) => s.url));
+
+test('in a browser, 「기록 시작」 above the app takes the address shown and each address the app moves to, counts them, ignores messages from anything but the app frame, and 「기록 끝」 saves them as a visit record whose candidate 「후보 보기」 opens', { skip: browserMissing }, async () => {
+  await withFakeApi((api) =>
+    withPassword('s3cret', () =>
+      withRebuiltFixture(appSettings(api), (config) =>
+        withServer(config, 'reviewer', (base) =>
+          withPage(base, async (p) => {
+            await p.waitForSelector('#screen-list li');
+            await p.click('#screen-list li:has-text("/home")');
+            const { app } = await (await fetch(`${base}/api/data`)).json();
+            await p.frameLocator('#center iframe.app').locator('#who:has-text("두루 관리자")').waitFor();
+            const recorder = p.locator('#center .frame-bar .recorder');
+            assert.equal(await recorder.textContent(), '기록 시작');
+            await recorder.locator('button:has-text("기록 시작")').click();
+            assert.equal(await recorder.textContent(), '기록 끝받은 주소 1');
+
+            const inApp = p.frames().find((f) => f.url().startsWith(`${app.url}/home`))!;
+            await inApp.evaluate(() => {
+              history.pushState({}, '', '/lab');
+              history.replaceState({}, '', '/lab#top');
+              history.replaceState({}, '', '/lab#top');
+              history.pushState({}, '', '/help');
+            });
+            await recorder.locator('text=받은 주소 4').waitFor();
+
+            await p.evaluate(() => window.postMessage({ duru: 'address', url: '/admin/report' }, '*'));
+            await p.locator('#center iframe.app').evaluate((frame: HTMLIFrameElement) => new Promise((done) => {
+              frame.addEventListener('load', done, { once: true });
+              frame.srcdoc = "<script>parent.postMessage({ duru: 'address', url: '/admin/report' }, '*');</script>";
+            }));
+            await p.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+            assert.equal(await recorder.locator('span').first().textContent(), '받은 주소 4');
+
+            await recorder.locator('button:has-text("기록 끝")').click();
+            await recorder.locator('.record-note:has-text("후보")').waitFor();
+            const [file] = fs.readdirSync(path.join(config.storiesDir, 'records'));
+            const name = path.basename(file, '.json');
+            assert.deepEqual(recordsIn(config.storiesDir), [['/home', '/lab', '/lab#top', '/help']]);
+            assert.equal(await recorder.locator('.record-note').textContent(), `주소 4개를 기록해 「${name}」 후보를 올렸습니다`);
+            assert.equal(await recorder.locator('button.record').textContent(), '기록 시작');
+
+            await recorder.locator('button:has-text("후보 보기")').click();
+            await p.waitForSelector(`#candidate-list li.selected:has-text("${name}")`);
+            assert.equal(await p.textContent('#center h3'), name);
+            assert.match((await p.textContent('#center .source'))!, new RegExp(`^out/stories/records/${name}\\.json · 단계 1–4$`));
+            assert.deepEqual(await p.locator('#center .story-path .step .records').allTextContents(), ['단계 1', '단계 2–3', '단계 4']);
+          }),
+        ),
+      ),
+    ),
+  );
+});
+
+test('in a browser, moving to a screen shown in another app pane while recording saves the record of the pane before and goes on with a new one, and stopping a record that got no address from the app saves nothing and says why', { skip: browserMissing }, async () => {
+  await withFakeApi((api) =>
+    withPassword('s3cret', () =>
+      withRebuiltFixture({ app: { ...appSettings(api).app, signedOutPaths: ['/signin'] } }, (config) =>
+        withServer(config, 'reviewer', async (base) => {
+          const { app } = await (await fetch(`${base}/api/data`)).json();
+          await withPage(base, async (p) => {
+            await p.waitForSelector('#screen-list li');
+            await p.click('#screen-list li:has-text("/home")');
+            await p.frameLocator('#center iframe.app').locator('#who:has-text("두루 관리자")').waitFor();
+            const recorder = p.locator('#center .frame-bar .recorder');
+            await recorder.locator('button:has-text("기록 시작")').click();
+            await p.frames().find((f) => f.url().startsWith(`${app.url}/home`))!.evaluate(() => history.pushState({}, '', '/lab'));
+            await recorder.locator('text=받은 주소 2').waitFor();
+
+            await p.click('#screen-list li:has-text("/signin")');
+            await p.frameLocator('#center iframe.app').locator('#path:has-text("/signin")').waitFor();
+            await recorder.locator('.record-note:has-text("후보")').waitFor();
+            assert.equal(await recorder.locator('span').first().textContent(), '받은 주소 1');
+            assert.deepEqual(recordsIn(config.storiesDir), [['/home', '/lab']]);
+
+            await recorder.locator('button:has-text("기록 끝")').click();
+            await recorder.locator('button.record:has-text("기록 시작"):enabled').waitFor();
+            assert.deepEqual(recordsIn(config.storiesDir).sort(), [['/home', '/lab'], ['/signin']]);
+          });
+
+          fs.rmSync(path.join(config.storiesDir, 'records'), { recursive: true });
+          await withPage(base, async (p) => {
+            await p.waitForSelector('#screen-list li');
+            await p.click('#screen-list li:has-text("/home")');
+            await p.frameLocator('#center iframe.app').locator('#who:has-text("두루 관리자")').waitFor();
+            const recorder = p.locator('#center .frame-bar .recorder');
+            await recorder.locator('button:has-text("기록 시작")').click();
+            await p.click('#screen-list li:has-text("/help")');
+            await p.frameLocator('#center iframe.app').locator('#path:has-text("/help")').waitFor();
+            await recorder.locator('text=받은 주소 2').waitFor();
+            await recorder.locator('button:has-text("기록 끝")').click();
+            await recorder.locator('.record-note:has-text("후보")').waitFor();
+            assert.deepEqual(recordsIn(config.storiesDir), [['/home', '/help']]);
+          });
+
+          fs.rmSync(path.join(config.storiesDir, 'records'), { recursive: true });
+          await withPage(base, async (p) => {
+            await p.waitForSelector('#screen-list li');
+            await p.click('#screen-list li:has-text("/home")');
+            await p.frameLocator('#center iframe.app').locator('#who:has-text("no script")').waitFor();
+            const recorder = p.locator('#center .frame-bar .recorder');
+            await recorder.locator('button:has-text("기록 시작")').click();
+            assert.equal(await recorder.locator('span').first().textContent(), '앱에서 받은 주소 없음');
+            await recorder.locator('button:has-text("기록 끝")').click();
+            assert.equal(await recorder.locator('.record-note').textContent(), '앱에서 주소를 받지 못해 기록을 남기지 않았습니다. 앱이 인라인 스크립트를 막으면 기록할 수 없습니다.');
+            assert.ok(!fs.existsSync(path.join(config.storiesDir, 'records')));
+          }, { setup: (page) => page.route(`${app.url}/home`, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><p id="who">no script</p>' })) });
+        }),
+      ),
+    ),
+  );
+});
+
+test('in a browser, with only appUrl the chosen screen says that moving around the app is recorded only with app', { skip: browserMissing }, async () => {
+  await withRebuiltFixture({ appUrl: 'http://127.0.0.1:1' }, (config) =>
+    withServer(config, 'reviewer', (base) =>
+      withPage(base, async (p) => {
+        await p.waitForSelector('#screen-list li');
+        await p.click('#screen-list li:has-text("/home")');
+        assert.equal(await p.textContent('#center .no-recording'), '화면을 옮겨 다닌 기록은 app 설정으로 duru 가 앱을 띄울 때만 남길 수 있습니다');
+        assert.equal(await p.locator('#center .recorder').count(), 0);
+      }),
+    ),
+  );
+});
+
 const twoFrames = (p: Page) => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 const pageOverflow = (p: Page) => p.evaluate(() => document.documentElement.scrollHeight - innerHeight);
 
@@ -9911,6 +10060,58 @@ test('story writes that are not JSON requests are refused', async () => {
         assert.equal(res.status, 415, url);
       }
       assert.ok(!fs.existsSync(path.join(config.storiesDir, 'discarded')));
+    }),
+  );
+});
+
+test('a visit record posted from the app pane is written into the records folder of the stories folder, answered with its path from the config folder, and shows in the data as a candidate and not as a story', async () => {
+  await withFakeApi((api) =>
+    withPassword('s3cret', () =>
+      withRebuiltFixture({ ...CANDIDATES, ...appSettings(api) }, (config) =>
+        withServer(config, 'reviewer', async (base) => {
+          const steps = [{ url: '/home' }, { url: '/home?tab=2' }, { url: '/lab#top' }];
+          const res = await postJson(base, '/api/records', { steps });
+          assert.equal(res.status, 201);
+          const { record } = await res.json();
+          assert.match(record, /^example-stories\/records\/\d{4}-\d{2}-\d{2}-[0-9a-f]{8}\.json$/);
+          assert.deepEqual(JSON.parse(fs.readFileSync(path.join(config.configDir, record), 'utf8')), { steps });
+          const data: PageData = await (await fetch(`${base}/api/data`)).json();
+          const shown = data.candidates.list.find((c) => c.source.record === record)!;
+          assert.deepEqual([shown.key, shown.name, shown.source], ['/home#Home > /lab#Lab', path.basename(record, '.json'), { record, steps: [1, 3] }]);
+          assert.ok(!data.stories.list.some((s) => s.id === shown.name));
+          assert.ok(!data.stories.notices.some((n) => n.file.includes('records')));
+
+          const storied = await (await postJson(base, '/api/records', { steps: [{ url: '/signin' }, { url: '/home' }, { url: '/help' }] })).json();
+          const after: PageData = await (await fetch(`${base}/api/data`)).json();
+          assert.ok(!after.candidates.list.some((c) => c.source.record === storied.record));
+          assert.equal(fs.readdirSync(path.join(config.storiesDir, 'records')).length, 2);
+        }),
+      ),
+    ),
+  );
+});
+
+test('a visit record whose steps are not addresses inside the app, a request that is not JSON, or a record with no app served is refused and writes nothing', async () => {
+  await withFakeApi((api) =>
+    withPassword('s3cret', () =>
+      withRebuiltFixture({ ...CANDIDATES, ...appSettings(api) }, (config) =>
+        withServer(config, 'reviewer', async (base) => {
+          for (const body of [{}, { steps: [] }, { steps: [{ url: 'http://evil.example/home' }] }, [{ url: '/home' }]]) {
+            const res = await postJson(base, '/api/records', body);
+            assert.equal(res.status, 400, JSON.stringify(body));
+          }
+          const plain = await fetch(`${base}/api/records`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ steps: [{ url: '/home' }] }) });
+          assert.equal(plain.status, 415);
+          assert.ok(!fs.existsSync(path.join(config.storiesDir, 'records')));
+        }),
+      ),
+    ),
+  );
+  await withRebuiltFixture(CANDIDATES, (config) =>
+    withServer(config, 'reviewer', async (base) => {
+      const res = await postJson(base, '/api/records', { steps: [{ url: '/home' }] });
+      assert.equal(res.status, 404);
+      assert.ok(!fs.existsSync(path.join(config.storiesDir, 'records')));
     }),
   );
 });

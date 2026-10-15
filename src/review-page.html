@@ -88,8 +88,11 @@
   .frame-bar select:disabled, .frame-bar input:disabled { opacity: .6; }
   .frame-bar .path-values { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
   .frame-bar .path-values input[type=text] { width: 12em; padding: 2px 6px; }
-  .frame-bar .path-values button { padding: 2px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); font: inherit; cursor: pointer; }
+  .frame-bar :is(.path-values, .recorder) button { padding: 2px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); font: inherit; cursor: pointer; }
   .frame-bar .fallback { font-weight: 600; }
+  .frame-bar .recorder { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .frame-bar .recorder button.on { border-color: var(--fail); color: var(--fail); font-weight: 600; }
+  .frame-bar .recorder button:disabled { cursor: default; opacity: .6; }
   .frame-bar + .frame-note { margin-top: 0; border-radius: 0 0 6px 6px; }
   .settings-bar { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-bottom: 0; background: var(--bg); font-size: 13px; }
   .settings-bar.overridden { border-color: var(--changed); background: var(--changed-bg); }
@@ -558,7 +561,7 @@ const STORY_FILTERS = [
   ...['untested', 'partial', 'fail'].map((key) => ({ key, ...STORY_STATUS[key], status: true, keep: (st) => st.status === key })),
   { key: 'broken', label: '링크 없음', title: '이웃한 두 화면을 잇는 링크가 맵에 없는 자리가 있는 스토리', keep: (st) => st.broken },
 ];
-const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null };
+const state = { data: null, selected: null, target: null, filters: new Set(), query: '', draft: null, error: null, view: 'flow', flowPicked: false, flowFilter: 'all', flowQuery: '', zoom: 1, ended: false, failed: false, roleChoice: 'auto', pathValues: new Map(), settingsError: null, frameScreen: null, side: 'screens', story: null, storyFilters: new Set(), storyDraft: null, legends: { flow: { open: false, dismissed: false }, path: { open: false, dismissed: false } }, storyPath: null, openGroups: new Set(), openLong: new Set(), rightView: null, storyOpen: new Set(), dockKey: null, historyOpen: false, historyFilter: null, judgmentError: null, untaggedTest: null, untaggedQuery: '', bulk: null, bulkBusy: false, ending: false, candidate: null, candidateTalk: null, storyEdit: null, storyError: null, storyWriting: false, compose: null, composing: false, caseSaving: false, caseError: null, screenInfoOpen: false, discardedOpen: false, undiscardError: null, callInfoShut: null, storyQuery: '', storiesFolded: false, talkScope: 'here', talkFilter: 'all', reachRecord: null, recording: null, recordSaving: 0, recordNote: null, frameAddress: null };
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -1859,7 +1862,7 @@ function appFrame(s, { link, fallback, opens, missing }, entry) {
   const values = entry && pathValueBar(s, entry, fallback);
   if (!link) {
     return [
-      values && h('div', { class: 'frame-bar' }, unknown, values),
+      (values || state.recording) && h('div', { class: 'frame-bar' }, unknown, values, state.recording ? recorder() : null),
       h('div', { class: 'frame-note muted' }, missing ? `${missing.join(', ')} 값이 없어 이 화면을 띄울 수 없습니다.` : '주소에 값이 필요한 화면이라 앱을 띄우지 않았습니다.'),
     ];
   }
@@ -1894,6 +1897,7 @@ function appFrame(s, { link, fallback, opens, missing }, entry) {
       unknown,
       h('a', { href: opened, target: '_blank', rel: 'noopener', onclick: entry?.issued && !fallback ? openAnew : null }, '새 창으로 열기 ↗'),
       appWidthPicker(),
+      recorder(),
       values),
     h('div', { class: 'settings-bar', id: 'settings-bar', hidden: true }),
     appStage(opened),
@@ -1945,6 +1949,7 @@ function appWidthPicker() {
 const fitPercent = (room) => appSize.width && Math.max(1, Math.min(100, Math.floor((room / appSize.width) * 100)));
 
 function appStage(src) {
+  state.frameAddress = null;
   const frame = h('iframe', { class: 'app', 'data-src': src, title: '앱 화면', style: appSize.width ? `width: ${appSize.width}px` : null });
   const stage = h('div', { class: 'app-stage' }, h('div', { class: 'app-sizer' }, frame));
   appResized.disconnect();
@@ -1978,6 +1983,90 @@ function fitApp() {
   const size = percent < 100 ? `${percent}%로 줄여서` : percent > 100 ? `${percent}%로 키워서` : '실제 크기로';
   note.textContent = `${appSize.width}px 화면을 ${size} 보여 줍니다${wide ? ' · 칸을 넘는 부분은 옆으로 넘겨 봅니다' : ''}`;
 }
+
+// ---------- 앱 iframe 에서 이동한 URL 기록 ----------
+
+function appOrigins() {
+  const app = state.data?.app;
+  return app ? [app.url, app.signedOutUrl, ...app.roles.map((r) => r.url)].filter(Boolean).map((u) => new URL(u).origin) : [];
+}
+
+function recorder() {
+  const r = state.recording;
+  const note = state.recordNote;
+  return h('span', { class: 'recorder' },
+    r
+      ? [h('button', { class: 'record on', onclick: stopRecording }, '기록 끝'),
+        h('span', { class: r.steps.length ? null : 'muted' }, r.steps.length ? `받은 주소 ${r.steps.length}` : '앱에서 받은 주소 없음')]
+      : h('button', { class: 'record', title: '앱 칸에서 화면을 옮겨 다닌 순서를 방문 기록으로 남겨 스토리 후보로 올립니다', disabled: state.recordSaving > 0, onclick: startRecording }, '기록 시작'),
+    note && h('span', { class: `record-note ${note.error ? 'error' : 'muted'}` }, note.text),
+    note?.candidate && h('button', { class: 'record-candidate', onclick: () => showRecordCandidate(note.candidate) }, '후보 보기'));
+}
+
+function renderRecorder() {
+  document.querySelector('#center .recorder')?.replaceWith(recorder());
+}
+
+function startRecording() {
+  const at = state.frameAddress;
+  state.recording = { origin: at?.origin ?? null, steps: at ? [at.url] : [] };
+  state.recordNote = null;
+  renderRecorder();
+}
+
+function stopRecording() {
+  const { steps } = state.recording;
+  state.recording = null;
+  if (steps.length) return saveRecord(steps);
+  state.recordNote = { error: true, text: '앱에서 주소를 받지 못해 기록을 남기지 않았습니다. 앱이 인라인 스크립트를 막으면 기록할 수 없습니다.' };
+  renderRecorder();
+}
+
+async function saveRecord(steps) {
+  state.recordSaving++;
+  state.recordNote = { text: '기록을 저장하는 중' };
+  renderRecorder();
+  let saved = null;
+  try {
+    const res = await fetch('/api/records', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ steps: steps.map((url) => ({ url })) }) });
+    if (!res.ok) throw new Error(await res.text());
+    saved = await res.json();
+    await load();
+    const c = state.data.candidates.list.find((x) => x.source.record === saved.record);
+    state.recordNote = c
+      ? { text: `주소 ${steps.length}개를 기록해 「${c.name}」 후보를 올렸습니다`, candidate: c.key }
+      : { text: state.data.candidates.stale ?? `주소 ${steps.length}개를 기록했지만, 같은 화면 순서가 이미 스토리나 후보, 버린 후보에 있어 새 후보는 없습니다` };
+  } catch (err) {
+    state.recordNote = { error: true, text: saved ? `기록했지만 다시 읽지 못했습니다: ${err.message}` : `기록을 저장하지 못했습니다: ${err.message}` };
+  } finally {
+    state.recordSaving--;
+  }
+  render();
+  renderRecorder();
+}
+
+function showRecordCandidate(key) {
+  Object.assign(state, { view: 'list', side: 'stories', composing: false, recordNote: null });
+  selectCandidate(key);
+}
+
+// 로그아웃 iframe 과 역할별 iframe 은 계정이 따로라, 다른 iframe 에서 URL 이 오면 그때까지의 기록을 저장하고 새로 기록한다.
+window.addEventListener('message', (e) => {
+  const frame = document.querySelector('#center iframe.app');
+  const url = e.data?.duru === 'address' ? e.data.url : null;
+  if (!frame || e.source !== frame.contentWindow || !appOrigins().includes(e.origin) || typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) return;
+  state.frameAddress = { origin: e.origin, url };
+  const r = state.recording;
+  if (!r) return;
+  if (r.origin !== null && r.origin !== e.origin) {
+    if (r.steps.length) saveRecord(r.steps);
+    state.recording = { origin: e.origin, steps: [url] };
+  } else {
+    r.origin = e.origin;
+    if (r.steps.at(-1) !== url) r.steps.push(url);
+  }
+  renderRecorder();
+});
 
 // ---------- 프레임 위에 붙는 설정 줄 ----------
 
@@ -2208,7 +2297,8 @@ function renderCenterHead(s) {
       h('span', { class: 'muted' }, s.component),
       app ? null
         : link ? h('a', { href: link, target: '_blank', rel: 'noopener' }, '실제 앱에서 열기 ↗')
-          : state.data.appUrl ? h('span', { class: 'muted' }, '경로 변수가 있어 실제 앱 링크를 만들 수 없음') : null),
+          : state.data.appUrl ? h('span', { class: 'muted' }, '경로 변수가 있어 실제 앱 링크를 만들 수 없음') : null,
+      !app && state.data.appUrl ? h('span', { class: 'muted no-recording' }, '화면을 옮겨 다닌 기록은 app 설정으로 duru 가 앱을 띄울 때만 남길 수 있습니다') : null),
     h('div', { class: 'muted mono' }, s.id),
     app ? appFrame(s, target, entry) : null);
   fillNeedKinds(head, s);

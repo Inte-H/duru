@@ -5,7 +5,7 @@ import { pathOf, screenFinder } from './address-match.ts';
 import { compare, isPlainObject } from './config.ts';
 import { jsonFiles } from './json-files.ts';
 import { recordName, writeNewRecord } from './marks.ts';
-import { addStory, CANDIDATES, DISCARDED, isDate, isScreenList, isSource, isText, loadStories, writableStoriesFolder } from './stories.ts';
+import { addStory, CANDIDATES, DISCARDED, RECORDS, isDate, isScreenList, isSource, isText, loadStories, writableStoriesFolder } from './stories.ts';
 import { checkStories, linksWithoutConditions, staleMapMessage } from './story-paths.ts';
 import { withoutTags } from './verdict.ts';
 
@@ -245,8 +245,32 @@ export function undiscardCandidate(dir: string, screens: unknown, { author }: { 
   return { ...undone, file: path.join(DISCARDED, file) };
 }
 
+const isAddress = (url: unknown) => typeof url === 'string' && url.startsWith('/') && !url.startsWith('//');
+
+// 쓴 파일은 고치지도 지우지도 않는다.
+export function saveVisitRecord(dir: string, steps: unknown, now = new Date()) {
+  if (!Array.isArray(steps) || !steps.length || !steps.every((s) => isPlainObject(s) && isAddress(s.url))) {
+    throw new Error('steps 는 / 로 시작하는 앱 안 주소를 url 에 담은 단계를 하나 이상 차례대로 담은 목록이어야 합니다');
+  }
+  writableStoriesFolder(dir);
+  const folder = path.join(dir, RECORDS);
+  if (fs.existsSync(folder) && !isFolder(folder)) throw new Error(`스토리 폴더 안 ${RECORDS} 가 파일이라 기록을 쓸 수 없습니다`);
+  const file = path.join(RECORDS, `${now.toISOString().slice(0, 10)}-${crypto.randomUUID().slice(0, 8)}.json`);
+  writeNewRecord(path.join(dir, file), { steps: steps.map(({ url }) => ({ url })) });
+  return file;
+}
+
+function recordSources(config: any) {
+  const folder = path.join(config.storiesDir, RECORDS);
+  if (!fs.existsSync(folder)) return { sources: config.visitRecords, notices: [] };
+  if (!isFolder(folder)) return { sources: config.visitRecords, notices: [{ file: relative(config.configDir, folder), reason: `${RECORDS} 는 앱 칸에서 남긴 방문 기록을 담는 폴더여야 합니다` }] };
+  return { sources: [...config.visitRecords, folder], notices: [] };
+}
+
 export function storyCandidates(config: any, map: any, mapFile: string, traced: TracedTest[] = []) {
-  const { records, notices } = loadVisitRecords(config.visitRecords, config.configDir);
+  const { sources, notices: folderNotices } = recordSources(config);
+  const { records, notices: recordNotices } = loadVisitRecords(sources, config.configDir);
+  const notices = [...folderNotices, ...recordNotices];
   const { discarded, notices: discardedNotices } = loadDiscarded(config.storiesDir);
   const { found: stored, notices: storedNotices } = loadStored(config.storiesDir);
   const all = [...notices, ...[...discardedNotices, ...storedNotices].map((n) => ({ ...n, file: relative(config.configDir, path.join(config.storiesDir, n.file)) }))];
