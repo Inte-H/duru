@@ -238,7 +238,8 @@ client with example results and a config to start from.
   and `judgments` in `outDir`).
 - `author` — the name marks and judgments are signed with (optional; default `git config user.name` in the
   config's folder, else the computer's user name). Leave it out of a config file a team shares.
-- `storiesDir` — folder of story files, or a single story file (default: `stories` in `outDir`).
+- `storiesDir` — folder of story files, or a single story file (default: `stories` in `outDir`). The visits
+  recorded on the review page are kept in `records/` in it.
 - `visitRecords` — visit record files or folders that story candidates are made from (optional), as
   `["qa/records"]`. Playwright reports in `tests` whose tests left a trace give candidates too.
 - `baselineMap` — the `map.json` of an earlier version of the same client (optional), such as the map kept from
@@ -513,10 +514,24 @@ with the list in `steps`, each step with the `url` it was at. Other keys are ign
 }
 ```
 
-duru turns each record named in `visitRecords` into a story candidate: each address goes to the screen whose
-route path matches it, steps in a row on the same screen become one step, and an address no screen matches stays
-as it is. A candidate with the screen order of a story or of a discarded candidate is not offered. A record that
-cannot be read is skipped and noted with its path and why.
+duru turns each record named in `visitRecords`, and each record in `records/` in `storiesDir`, into a story
+candidate: each address goes to the screen whose route path matches it, steps in a row on the same screen become
+one step, and an address no screen matches stays as it is. A candidate with the screen order of a story or of a
+discarded candidate is not offered. A record that cannot be read is skipped and noted with its path and why.
+
+With `app` set, a reviewer can also record a visit by moving around the app on the review page. 「기록 시작」 above
+the app pane starts from the address the pane shows and takes each address the app moves to; 「기록 끝」 saves them
+into `records/` in `storiesDir` as `{ "steps": [{ "url": "/home" }, { "url": "/document/draft?page=2" }] }`, with the
+path, the query and what follows `#`, and no host or port. The file is named by the date and a random ID
+(`2026-10-15-1a2b3c4d.json`), which is also the candidate's name, and is never changed or deleted; keep the folder in
+git with the stories. The signed-out pane and each role's pane are recorded apart: when an address comes from
+another pane, the record so far is saved and a new one begins. Recording needs `app`, because duru puts the script
+that reports the address into the app pages it serves; with only `appUrl` the page says it cannot record. It does
+not record:
+
+- an app whose security policy blocks inline scripts: no address arrives, and the page says so when the recording
+  stops
+- a window the app opens with `window.open`, or the app opened with 「새 창으로 열기」
 
 A Playwright test needs no visit record when its report is listed in `tests` and the test ran with Playwright's
 `trace` option on: the screens it passed through, read from its trace by `rebuild`, become a candidate whose source
@@ -551,7 +566,7 @@ noted with its path and why.
 ## Review page
 
 `review` serves a local page that reads `map.json` and `tests.json` from `outDir` (run `rebuild` first) and writes
-only marks, judgments and story files. The page keeps the place being looked at in its address, so the back
+only marks, judgments, story files and the visits it records. The page keeps the place being looked at in its address, so the back
 button, a reload and a copied address work.
 
 **Flow.** The page opens on the flow: one line per screen, in columns by how many links or moves they are from an
@@ -610,7 +625,10 @@ beside the pickers say what is shown: 「1280px 화면을 58%로 줄여서 보�
 followed by 「칸을 넘는 부분은 옆으로 넘겨 봅니다」 when the frame scrolls sideways. Dragging the frame's bottom
 corner makes it taller or shorter, and the app
 gets the height shown divided by the percent. The width and percent picked stay, in both views, until the page is
-reloaded. Below come the
+reloaded. 「기록 시작」 in the same bar records the screens moved through in the app (see Story candidates): while it
+records, 「받은 주소 N」 counts the addresses received so far, or 「앱에서 받은 주소 없음」 says none came yet, and
+once the record is saved, the line beside it names the candidate and 「후보 보기」 opens it in the stories tab. Below
+come the
 screen's tests by depth and its API calls, with
 a row per option value. A screen that opens only under a role or a setting carries 「역할」 or 「설정」 next to its
 name, as its line in the flow does. Under the tables, 「화면 정보」 starts folded, with the number of links into the

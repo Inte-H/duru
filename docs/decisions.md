@@ -1776,6 +1776,52 @@ Alternatives compared:
 - Every comment with several targets in `general/`: the files of a screen would be split between two folders by the
   number of tags.
 
+**A reviewer records the screens they move through in the app pane: the app host puts a script into every app page
+that reports each new address to the review page, and stopping saves the addresses as a visit record.**
+Driver's decision in #261. The app pane loads the app from another origin than the review page, so the page cannot
+read the pane's address itself. With `app` set duru already serves the app's pages and puts a script after `<head>`
+to store the login token; a few more lines there wrap `history.pushState` and `history.replaceState`, listen for
+`popstate` and `hashchange`, and post the address to the parent window on load and on each change. The app is not
+changed, the reviewer stays on the review page, and no dependency is added. The script posts only to the review
+page's own origins, so another site that frames the app cannot read its addresses, and the page takes a message only
+from the frame it shows and only from the origins of the app addresses it opened.
+The record holds the path, the query and what follows `#`, without host and port: every pane has a port of its own,
+and candidates are matched by path anyway. Every change of address is a step, also one of the query or after `#`
+alone; the same address twice in a row is one step, and steps on the same screen are merged into one as for any
+record. The signed-out pane and each role's pane are separate records, since each is another account: when an
+address comes from another pane, the record so far is saved and a new one begins. Recording needs `app`; with only
+`appUrl` duru does not serve the app and the page says so. An app whose security policy blocks inline scripts sends
+no address, and the page says it got none when the recording stops. A window the app opens with `window.open` is
+outside the pane and is not recorded; in into-sign that is only the password reset page.
+Tools that record a person's moves were checked on 2026-10-15. Playwright codegen opens a browser of its own: "When
+running the `codegen` command two windows will be opened." (https://playwright.dev/docs/codegen). QA Wolf's recorder
+did the same in its public repository: `npx qawolf record <url>` opens a browser and "Your browser actions are
+converted to Playwright and Jest code" (https://github.com/tchigher/qawolf). Cypress Studio records inside the
+browser that runs the tests: "Studio translates each action into a Cypress command in real time and adds it to your
+spec file." (https://docs.cypress.io/app/guides/cypress-studio), "Cypress tests run inside of the browser!"
+(https://docs.cypress.io/app/references/trade-offs); that it sends the app through a proxy to share the origin was
+not found in its documents and is a guess. The into-sign client was read but not run: it moves between screens with
+`history.push` and `replace` of react-router 5, keeps its token in localStorage and no cookie, writes no absolute
+app address, and has no web socket, service worker or framing rule in its own code, and it is already reviewed with
+`app`.
+Alternatives compared:
+- The review server passes the app through itself so the origins match: a reverse proxy with cookies, absolute
+  addresses, web sockets and headers to handle, and into-sign mounts its routes at `/`, so it could not share a path
+  prefix and would need a port of its own anyway (a guess). Close to Cypress, as far as could be found.
+- duru opens a browser with Playwright and reads its address: catches new windows and full reloads too, but the
+  reviewer moves around in a window apart from the review page, `playwright-core` becomes a dependency of the
+  package with a browser to download, and WSL needs a display for the window (a guess). The way of Playwright codegen
+  and QA Wolf.
+- A short script in the app's development build: almost nothing in duru, but the app's `index.html` has to change and
+  recording works only on a branch that has the change. No tool found does this.
+
+**A recorded visit is written once into `records/` in `storiesDir` and read with the records in `visitRecords`.**
+Driver's decision in #261. It works with no `visitRecords` in the config, which into-sign's has none of, and the
+records a person made do not mix with the ones a test run writes and may clear. Like `candidates/` and `discarded/`,
+a file is named by the date and eight letters of a random ID and never changed or deleted, so records made on two
+computers merge in git without a conflict, and the folder is not read as stories. A recorded visit becomes a
+candidate the way any record does, named by its file, with its path from the config folder as its source.
+
 ## Why this is worth building — prior art (checked 2026-09-29)
 
 Four research passes examined 84 tools, repositories, agent skills, MCP servers and papers. None
