@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { compare } from './config.ts';
-import { GENERAL, recordKind } from './marks.ts';
+import { GENERAL, orderKey, recordKind } from './marks.ts';
 import { reviewData } from './review.ts';
 import { SERVER_NOT_COMPARED } from './server.ts';
 import { testsAt } from './story-paths.ts';
@@ -92,7 +92,7 @@ const byline = (author: string, date: string, indent: string) => `(${within(auth
 
 function targetText(t: any) {
   if (t.candidate !== undefined) return `story candidate ${t.candidate}`;
-  if (t.screens !== undefined) return `screen order ${t.screens.join(' > ')}`;
+  if (t.screens !== undefined) return `screen order ${orderKey(t.screens)}`;
   const part = t.part && (t.part.kind === 'step' ? `step ${t.part.key.step}`
     : t.part.kind === 'hop' ? `link from step ${t.part.key.step}`
     : t.part.kind === 'test' ? `test "${t.part.key.title}"`

@@ -113,11 +113,11 @@ function candidateTarget(target: MarkTarget) {
 }
 
 // 화면 ID 에는 빈칸이 들어가지 않으므로(map.ts 의 TAG_FORBIDDEN) ` > ` 로 이어도 서로 다른 순서가 같은 키가 되지 않는다.
-const orderKey = (screens: string[]) => screens.join(' > ');
+export const orderKey = (screens: string[]) => screens.join(' > ');
 
 function orderTarget(target: MarkTarget) {
   const { screens } = target;
-  if (!isScreenList(screens)) throw new Error('a screen order mark needs a list of one or more screen IDs');
+  if (!isScreenList(screens) || screens.some((s) => /\s/.test(s))) throw new Error('a screen order mark needs a list of one or more screen IDs without spaces');
   const repeated = screens.findIndex((s, i) => i > 0 && s === screens[i - 1]);
   if (repeated > 0) throw new Error(`screens ${repeated} and ${repeated + 1} of a screen order are the same screen`);
   if (['story', 'candidate', 'node', 'option', 'depth', 'case', 'part'].some((k) => (target as Record<string, unknown>)[k] !== undefined)) throw new Error('a screen order mark takes no story, candidate, node, option, depth, case or part');
@@ -267,10 +267,11 @@ export function classifyMarks(marks: Mark[], map: MarkableMap, storyIds: string[
   const kinds = new Set(caseKinds);
   const candidates = new Set(candidateKeys);
   const paths = new Map(storyPaths.map((p) => [p.id, p]));
+  const screenIds = new Set(map.screens.map((s) => s.id));
   const isAttached = (t: MarkTarget) => (t.candidate !== undefined
     ? candidates.has(t.candidate)
     : t.screens !== undefined
-    ? t.screens.every((id) => map.screens.some((s) => s.id === id))
+    ? t.screens.every((id) => screenIds.has(id))
     : t.story !== undefined
     ? stories.has(t.story)
     : nodes.has(t.node!) && (!t.option || nodes.get(t.node!)!.has(t.option.key)) && (t.case === undefined || kinds.has(t.case)));

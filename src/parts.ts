@@ -2,7 +2,7 @@ import { settingConditionName } from './access.ts';
 import type { Described, SettingSource } from './access.ts';
 import { testRef } from './judgments.ts';
 import type { Part } from './marks.ts';
-import { checkStories } from './story-paths.ts';
+import { checkStories, linksWithoutConditions } from './story-paths.ts';
 
 interface LinkedTest {
   title: string;
@@ -199,7 +199,8 @@ export interface OrderPlace {
   links: ({ from: string; to: string } & StoryLink)[];
 }
 
-export function locateOrder(screens: string[], map: { screens: PartScreen[] }): OrderPlace {
+export function locateOrder(screens: string[], map: { screens: PartScreen[] }): OrderPlace | null {
+  if (linksWithoutConditions(map)) return null;
   const [{ links }] = checkStories(map, [{ screens }]);
   return { screens: screens.map((id) => screenPlace(id, map.screens)), links };
 }

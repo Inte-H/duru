@@ -3285,7 +3285,8 @@ function stopOrdering() {
   render();
 }
 
-const flowOrdering = () => !!state.ordering && state.view === 'flow' && !state.composing;
+const orderingOn = (draftKey, base) => state.ordering?.draftKey === draftKey && keyOf(state.ordering.base) === keyOf(base);
+const flowOrdering = () => state.view === 'flow' && state.flowPicked && !state.composing && !state.storyPath && !!state.target && orderingOn('draft', state.target);
 
 function addOrderScreen(id) {
   const { draftKey, base } = state.ordering;
@@ -3362,7 +3363,7 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
   const untag = (t) => () => {
     const rest = tags.filter((x) => keyOf(x) !== keyOf(t));
     draft.tags = rest.length || keyOf(t) === keyOf(target) ? rest : undefined;
-    if (t.screens !== undefined) stopOrdering();
+    if (t.screens !== undefined) state.ordering = null;
     render();
   };
   const dropOrderStep = (order, i) => () => {
@@ -3373,7 +3374,7 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
     render();
   };
   const tagOf = (t) => (t.screens !== undefined ? orderChip(t, untag(t), (i) => dropOrderStep(t, i)) : tagChip(keyOf(t) === keyOf(target) ? label : chipLabel(t, target), untag(t)));
-  const ordering = state.ordering?.draftKey === draftKey;
+  const ordering = orderingOn(draftKey, target);
   const picker = h('ul', { class: 'plain tag-pick', role: 'listbox', 'aria-label': '꼬리표 고르기', hidden: true });
   const field = h('textarea', {
     placeholder: '코멘트 — 상태 없이 글만 남겨도 됩니다. @ 로 꼬리표를 더합니다',
@@ -3395,7 +3396,7 @@ function markForm(target, draftKey, label, { folded = true } = {}) {
         render();
         focusTalk();
       } }, `${label} 다시 붙이기`)],
-      state.view === 'flow' ? h('button', {
+      state.view === 'flow' && !state.storyPath ? h('button', {
         type: 'button', class: 'order-toggle', 'aria-pressed': String(ordering),
         title: ordering ? '끄면 흐름 그림의 상자를 눌러 화면을 엽니다' : '켜 두는 동안 흐름 그림의 상자를 누르면 그 화면이 화면 순서 꼬리표의 끝에 붙습니다',
         onclick: () => (ordering ? stopOrdering() : startOrdering(draftKey, target)),

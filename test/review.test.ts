@@ -11599,12 +11599,16 @@ test('in a browser, 「화면 순서」 in the tags of a screen opened in the fl
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/lab#Lab'));
         assert.equal(await p.locator('#right-info .history li', { hasText: 'fill in a way through' }).count(), 0);
 
+        await orderToggle(p).click();
         await p.click('#right .talk-scope button:has-text("전체")');
         const group = p.locator('#right-info .talk-group', { hasText: 'fill in a way through' });
         assert.equal(await group.locator('h3').textContent(), '화면 순서 /signin → /home');
         await group.locator('.talk-line').click();
         await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/signin#SignIn'));
         await p.locator('#right-info .history li.reached', { hasText: 'fill in a way through' }).waitFor();
+        assert.equal(await orderToggle(p).getAttribute('aria-pressed'), 'false', 'turned on for /lab, it is not on for the screen opened from 「전체」');
+        await pressBox(p, '/help#Help');
+        await p.waitForFunction(() => decodeURIComponent(location.hash).includes('screen=/help#Help'));
 
         await p.click('#view-list');
         assert.deepEqual(await p.locator('#left .detached li code').allTextContents(), ['화면 순서 /home → /gone#Gone']);

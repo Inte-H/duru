@@ -528,6 +528,7 @@ test('a comment on a screen order takes no status, and an order that is empty, n
       [{ target: { screens: [] }, note: 'x' }, /a screen order mark needs a list of one or more screen IDs/],
       [{ target: { screens: '/home#Home' }, note: 'x' }, /a screen order mark needs a list of one or more screen IDs/],
       [{ target: { screens: ['/home#Home', ' '] }, note: 'x' }, /a screen order mark needs a list of one or more screen IDs/],
+      [{ target: { screens: ['/home#Home > /lab#Lab'] }, note: 'x' }, /a screen order mark needs a list of one or more screen IDs without spaces/],
       [{ target: { screens: ['/home#Home', '/lab#Lab', '/lab#Lab'] }, note: 'x' }, /screens 2 and 3 of a screen order are the same screen/],
       [{ target: { screens: ORDER, node: '/home#Home' }, note: 'x' }, /a screen order mark takes no story, candidate, node, option, depth, case or part/],
       [{ target: { screens: ORDER, story: 'run-lab' }, note: 'x' }, /a screen order mark takes no story/],
